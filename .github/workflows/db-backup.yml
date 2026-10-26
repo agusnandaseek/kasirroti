@@ -41,28 +41,44 @@ jobs:
           echo "BACKUP_FILENAME=$FILENAME" >> $GITHUB_ENV
           echo "BACKUP_FILESIZE=$FILESIZE" >> $GITHUB_ENV
 
+      - name: Simpan Backup ke GitHub Actions Artifacts (Dual Backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILENAME }}
+          path: ${{ env.BACKUP_FILENAME }}
+          retention-days: 30
+
       - name: Konfigurasi rclone ke Google Drive
         env:
+          GDRIVE_TOKEN: ${{ secrets.RCLONE_GDRIVE_TOKEN }}
           GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_KEY }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          if [ -z "$GDRIVE_SA_KEY" ] || [ -z "$GDRIVE_FOLDER_ID" ]; then
-            echo "Error: Secret GDRIVE_SERVICE_ACCOUNT_KEY atau GDRIVE_FOLDER_ID belum disetel."
-            exit 1
-          fi
-
-          # Simpan Service Account JSON ke temporary file
-          echo "$GDRIVE_SA_KEY" > /tmp/gdrive_sa.json
-          
-          # Konfigurasi rclone
           mkdir -p ~/.config/rclone
-          cat <<EOF > ~/.config/rclone/rclone.conf
+
+          if [ -n "$GDRIVE_TOKEN" ]; then
+            echo "Menggunakan OAuth Token Akun Pribadi..."
+            cat <<EOF > ~/.config/rclone/rclone.conf
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+          elif [ -n "$GDRIVE_SA_KEY" ]; then
+            echo "Menggunakan Service Account..."
+            echo "$GDRIVE_SA_KEY" > /tmp/gdrive_sa.json
+            cat <<EOF > ~/.config/rclone/rclone.conf
           [gdrive]
           type = drive
           scope = drive
           service_account_file = /tmp/gdrive_sa.json
           root_folder_id = ${GDRIVE_FOLDER_ID}
           EOF
+          else
+            echo "Error: Secret RCLONE_GDRIVE_TOKEN atau GDRIVE_SERVICE_ACCOUNT_KEY belum disetel."
+            exit 1
+          fi
 
       - name: Upload Backup ke Google Drive
         run: |

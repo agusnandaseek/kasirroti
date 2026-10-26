@@ -44,6 +44,7 @@ yarn-error.log*
 
 # security & scans
 strix_runs/
+rclone.exe
 
 # vercel
 .vercel
