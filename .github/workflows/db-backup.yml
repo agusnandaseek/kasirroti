@@ -1,0 +1,86 @@
+name: Database Backup to Google Drive
+
+on:
+  schedule:
+    # Berjalan setiap hari pukul 19:00 UTC (02:00 WIB)
+    - cron: '0 19 * * *'
+  workflow_dispatch: # Memungkinkan tombol "Run workflow" manual kapan saja dari tab GitHub Actions
+
+jobs:
+  backup:
+    name: Backup Supabase ke Google Drive
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL Client & rclone
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client rclone
+
+      - name: Dump PostgreSQL Database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Error: Secret SUPABASE_DB_URL belum disetel di GitHub Repository Secrets."
+            exit 1
+          fi
+
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          FILENAME="rotipos_backup_${TIMESTAMP}.sql.gz"
+          echo "Memulai backup pg_dump..."
+          
+          # Jalankan pg_dump dan kompres dengan gzip
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip > "$FILENAME"
+          
+          FILESIZE=$(ls -lh "$FILENAME" | awk '{print $5}')
+          echo "Backup selesai: $FILENAME (Ukuran: $FILESIZE)"
+          echo "BACKUP_FILENAME=$FILENAME" >> $GITHUB_ENV
+          echo "BACKUP_FILESIZE=$FILESIZE" >> $GITHUB_ENV
+
+      - name: Konfigurasi rclone ke Google Drive
+        env:
+          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_KEY }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          if [ -z "$GDRIVE_SA_KEY" ] || [ -z "$GDRIVE_FOLDER_ID" ]; then
+            echo "Error: Secret GDRIVE_SERVICE_ACCOUNT_KEY atau GDRIVE_FOLDER_ID belum disetel."
+            exit 1
+          fi
+
+          # Simpan Service Account JSON ke temporary file
+          echo "$GDRIVE_SA_KEY" > /tmp/gdrive_sa.json
+          
+          # Konfigurasi rclone
+          mkdir -p ~/.config/rclone
+          cat <<EOF > ~/.config/rclone/rclone.conf
+          [gdrive]
+          type = drive
+          scope = drive
+          service_account_file = /tmp/gdrive_sa.json
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+      - name: Upload Backup ke Google Drive
+        run: |
+          echo "Mengunggah $BACKUP_FILENAME ke folder Google Drive..."
+          rclone copy "$BACKUP_FILENAME" gdrive: --progress
+          echo "Upload berhasil!"
+
+      - name: Bersihkan Backup Lama (> 30 hari) di Google Drive
+        run: |
+          echo "Membersihkan backup yang lebih tua dari 30 hari di Google Drive..."
+          rclone delete --min-age 30d gdrive: || true
+          echo "Pembersihan selesai."
+
+      - name: Summary Laporan Backup
+        if: always()
+        run: |
+          echo "### 🛡️ Status Backup Database RotiPOS" >> $GITHUB_STEP_SUMMARY
+          echo "- **File Backup**: \`${BACKUP_FILENAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ukuran**: \`${BACKUP_FILESIZE}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tujuan**: Google Drive (Folder ID: \`${{ secrets.GDRIVE_FOLDER_ID }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Waktu Eksekusi**: $(date)" >> $GITHUB_STEP_SUMMARY
