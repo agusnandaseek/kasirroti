@@ -75,13 +75,14 @@ export default async function AdminPreordersPage({
     to: toKey ? zonedTimeToUtc(`${shiftDateKey(toKey, 1)} 00:00:00`, settings.timezone) : undefined,
   });
 
+  const pending = orders.filter((order) => order.status === "pending_confirmation").length;
+
   const tabs = TABS.map((tab) => ({
     href: `/admin/preorders${buildQuery({ status: tab.value, from: fromKey, to: toKey, q }) ? `?${buildQuery({ status: tab.value, from: fromKey, to: toKey, q })}` : ""}`,
     label: tab.label,
     active: status === tab.value,
+    alert: tab.value === "pending_confirmation" && pending > 0,
   }));
-
-  const pending = orders.filter((order) => order.status === "pending_confirmation").length;
 
   return (
     <div className="space-y-6">

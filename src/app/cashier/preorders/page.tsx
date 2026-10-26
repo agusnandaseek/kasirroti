@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Bell,
   CalendarClock,
   Clock3,
   Mail,
@@ -58,12 +59,14 @@ export default async function CashierPreordersPage({
       label: "Menunggu Konfirmasi",
       count: pending.length,
       active: tab === "pending",
+      alert: pending.length > 0,
     },
     {
       href: "/cashier/preorders?tab=scheduled",
       label: "Terkonfirmasi / Terjadwal",
       count: scheduled.length,
       active: tab === "scheduled",
+      alert: dueSoon > 0,
     },
   ];
 
@@ -81,6 +84,42 @@ export default async function CashierPreordersPage({
           />
         }
       />
+
+      {tab === "pending" && pending.length > 0 ? (
+        <div className="border-[3px] border-ink bg-butter-soft p-3 shadow-hard-sm sm:p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center border-2 border-ink bg-terracotta text-paper">
+              <Bell className="size-4 animate-bounce" strokeWidth={2.8} />
+            </span>
+            <div>
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-terracotta">
+                Tindakan Diperlukan
+              </p>
+              <p className="text-xs font-bold sm:text-sm">
+                Ada {pending.length} pre-order baru yang menunggu konfirmasi kasir.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "scheduled" && dueSoon > 0 ? (
+        <div className="border-[3px] border-ink bg-butter-soft p-3 shadow-hard-sm sm:p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center border-2 border-ink bg-butter text-ink">
+              <Clock3 className="size-4 animate-spin" strokeWidth={2.8} />
+            </span>
+            <div>
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-ink">
+                Waktunya Produksi
+              </p>
+              <p className="text-xs font-bold sm:text-sm">
+                Ada {dueSoon} pre-order yang jadwal pengambilannya mendekati (kurang dari 2 jam). Masukkan ke antrean produksi agar segera disiapkan.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <FilterTabs tabs={tabs} />

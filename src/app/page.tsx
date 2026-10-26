@@ -8,14 +8,16 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { getSettings } from "@/lib/data/settings";
 import { listProducts } from "@/lib/data/products";
-import { formatIDR } from "@/lib/format";
+import { getFeaturedActiveOrder } from "@/lib/data/orders";
+import { formatDateTime, formatIDR, formatTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [settings, products] = await Promise.all([
+  const [settings, products, activeOrder] = await Promise.all([
     getSettings(),
     listProducts({ availableOnly: true }),
+    getFeaturedActiveOrder(),
   ]);
 
   const featured = products.slice(0, 3);
@@ -99,30 +101,84 @@ export default async function HomePage() {
 
           <div className="relative mx-auto w-full max-w-sm lg:mx-0 lg:justify-self-end">
             <div className="absolute -left-4 -top-5 z-10 rotate-[-6deg] border-[3px] border-ink bg-terracotta px-4 py-2 font-display text-sm uppercase text-paper shadow-hard-sm">
-              Fresh from oven
+              {activeOrder ? "Live Antrean" : "Fresh from oven"}
             </div>
             <div className="border-[3px] border-ink bg-paper p-5 shadow-hard-lg">
               <div className="flex items-start justify-between border-b-[3px] border-dashed border-ink/40 pb-3">
                 <div>
                   <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted">
-                    Pesanan pre-order
+                    {activeOrder
+                      ? activeOrder.type === "pre_order"
+                        ? "Pre-order Aktif"
+                        : "Pesanan Kasir Aktif"
+                      : "Contoh Pesanan"}
                   </p>
-                  <p className="mt-1 font-mono text-2xl font-bold tracking-tight">PO-000042</p>
+                  <p className="mt-1 font-mono text-2xl font-bold tracking-tight">
+                    {activeOrder ? activeOrder.code : "PO-000042"}
+                  </p>
+                  {activeOrder ? (
+                    <p className="mt-0.5 text-xs font-semibold text-ink-soft">
+                      Pemesan: <span className="text-ink font-bold">{activeOrder.customerName}</span>
+                    </p>
+                  ) : null}
                 </div>
-                <Badge tone="mint">Siap diambil</Badge>
+                {activeOrder ? (
+                  <Badge
+                    tone={
+                      activeOrder.status === "ready"
+                        ? "mint"
+                        : activeOrder.status === "preparing"
+                          ? "butter"
+                          : activeOrder.status === "queued"
+                            ? "sky"
+                            : "outline"
+                    }
+                  >
+                    {activeOrder.status === "ready"
+                      ? "Siap diambil"
+                      : activeOrder.status === "preparing"
+                        ? "Sedang dibuat"
+                        : activeOrder.status === "queued"
+                          ? "Dalam antrean"
+                          : activeOrder.status}
+                  </Badge>
+                ) : (
+                  <Badge tone="mint">Siap diambil</Badge>
+                )}
               </div>
 
-              <div className="space-y-2.5 py-4 font-mono text-[11px]">
-                {featured.map((product) => (
-                  <div key={product.id} className="flex items-end justify-between gap-3">
-                    <span className="leading-tight">{product.name}</span>
-                    <span className="mb-1 flex-1 border-b-2 border-dotted border-ink/30" />
-                    <span>{formatIDR(product.price)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between text-muted">
-                  <span>Ambil</span>
-                  <span>Hari ini · 16:30</span>
+              <div className="space-y-2 py-4 font-mono text-[11px]">
+                {activeOrder && activeOrder.items.length > 0 ? (
+                  activeOrder.items.map((item) => (
+                    <div key={item.productId} className="flex items-start justify-between gap-2">
+                      <div className="leading-tight">
+                        <span className="font-bold">{item.quantity}x</span> {item.productName}
+                      </div>
+                      <span className="mb-0.5 flex-1 border-b-2 border-dotted border-ink/30" />
+                      <span className="shrink-0 font-bold">{formatIDR(item.subtotal)}</span>
+                    </div>
+                  ))
+                ) : featured.length > 0 ? (
+                  featured.map((product) => (
+                    <div key={product.id} className="flex items-end justify-between gap-3">
+                      <span className="leading-tight">1x {product.name}</span>
+                      <span className="mb-1 flex-1 border-b-2 border-dotted border-ink/30" />
+                      <span>{formatIDR(product.price)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-muted py-2">Menu toko sedang disiapkan</div>
+                )}
+
+                <div className="flex items-center justify-between text-muted pt-1 border-t border-dotted border-ink/20">
+                  <span>Waktu</span>
+                  <span>
+                    {activeOrder
+                      ? activeOrder.pickupAt
+                        ? `Pickup · ${formatDateTime(activeOrder.pickupAt, settings.timezone)} WIB`
+                        : `Pesan · ${formatTime(activeOrder.createdAt, settings.timezone)} WIB`
+                      : "Hari ini · 16:30 WIB"}
+                  </span>
                 </div>
               </div>
 
@@ -132,12 +188,26 @@ export default async function HomePage() {
                     Total
                   </span>
                   <span className="font-display text-2xl">
-                    {formatIDR(featured.reduce((sum, product) => sum + product.price, 0))}
+                    {formatIDR(
+                      activeOrder
+                        ? activeOrder.totalAmount
+                        : featured.reduce((sum, product) => sum + product.price, 0),
+                    )}
                   </span>
                 </div>
                 <div className="mt-3 flex items-center justify-between border-2 border-ink bg-butter-soft px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em]">
-                  <span>Bayar saat pengambilan</span>
-                  <span className="size-2 rounded-full bg-ink" />
+                  <span>
+                    {activeOrder
+                      ? activeOrder.paymentStatus === "paid"
+                        ? "Lunas (Sudah Dibayar)"
+                        : "Bayar saat pengambilan"
+                      : "Bayar saat pengambilan"}
+                  </span>
+                  <span
+                    className={`size-2 rounded-full ${
+                      activeOrder?.paymentStatus === "paid" ? "bg-mint" : "bg-ink"
+                    }`}
+                  />
                 </div>
               </div>
 
@@ -151,7 +221,7 @@ export default async function HomePage() {
                 ))}
               </div>
               <p className="mt-1.5 text-center font-mono text-[8px] uppercase tracking-[0.28em] text-muted">
-                Simpan tautan tracking milikmu
+                {activeOrder ? "Transaksi Terkoneksi Sistem POS" : "Simpan tautan tracking milikmu"}
               </p>
             </div>
 

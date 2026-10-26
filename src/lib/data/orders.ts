@@ -292,6 +292,33 @@ export async function listRecentOrders(limit = 6): Promise<OrderView[]> {
   return ((data ?? []) as unknown as OrderRow[]).map(mapOrder);
 }
 
+export async function getFeaturedActiveOrder(): Promise<OrderView | null> {
+  const admin = getAdminClient();
+  const { data: queueData, error: queueError } = await admin
+    .from("orders")
+    .select(ORDER_SELECT)
+    .in("order_status", ["preparing", "queued", "ready"])
+    .order("queue_priority", { ascending: false })
+    .order("queued_at", { ascending: true })
+    .limit(1);
+
+  if (!queueError && queueData && queueData.length > 0) {
+    return mapOrder(queueData[0] as unknown as OrderRow);
+  }
+
+  const { data: latestData, error: latestError } = await admin
+    .from("orders")
+    .select(ORDER_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (!latestError && latestData && latestData.length > 0) {
+    return mapOrder(latestData[0] as unknown as OrderRow);
+  }
+
+  return null;
+}
+
 export type DashboardData = {
   revenueToday: number;
   paidToday: number;

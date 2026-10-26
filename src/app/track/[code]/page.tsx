@@ -171,17 +171,21 @@ export default async function TrackPage({
                   <h1 className="mt-2 text-4xl uppercase leading-none sm:text-5xl">
                     {labelForStatus(order.status)}
                   </h1>
-                  <p className="mt-3 inline-flex items-center gap-2 font-mono text-xs">
-                    <ReceiptText className="size-4" strokeWidth={2.6} />
-                    <span className="text-lg font-bold tracking-tight">{order.code}</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 font-mono">
+                    <span className="inline-flex items-center gap-1.5 border-2 border-cream bg-butter px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-ink">
+                      Kode Lacak: <span className="font-mono text-base tracking-widest">{code}</span>
+                    </span>
                     <CopyButton
-                      value={order.code}
-                      label="Salin"
+                      value={code}
+                      label="Salin Kode"
                       variant="secondary"
                       size="sm"
-                      className="ml-1 h-7 border-cream bg-ink px-2 text-[9px] text-cream shadow-none hover:bg-ink-soft"
+                      className="h-8 border-cream bg-ink px-2.5 text-[9px] text-cream shadow-none hover:bg-ink-soft"
                     />
-                  </p>
+                    <span className="text-xs text-cream/70">
+                      (No. Pesanan: {order.code})
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-start gap-2 sm:items-end">

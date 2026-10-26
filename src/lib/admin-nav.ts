@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Package,
   ReceiptText,
+  ScrollText,
   Settings,
   Ticket,
   Users,
@@ -41,6 +42,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     links: [
       { href: "/admin/employees", label: "Karyawan", icon: Users },
       { href: "/admin/settings", label: "Pengaturan", icon: Settings },
+      { href: "/admin/logs", label: "Log Aktivitas", icon: ScrollText },
     ],
   },
 ];

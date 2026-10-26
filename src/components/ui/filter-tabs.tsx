@@ -6,6 +6,7 @@ export type FilterTab = {
   label: string;
   count?: number;
   active: boolean;
+  alert?: boolean;
 };
 
 export function FilterTabs({ tabs, className }: { tabs: FilterTab[]; className?: string }) {
@@ -26,12 +27,24 @@ export function FilterTabs({ tabs, className }: { tabs: FilterTab[]; className?:
             tab.active ? "bg-ink text-cream" : "text-muted hover:bg-cream hover:text-ink",
           )}
         >
-          {tab.label}
+          <span className="relative flex items-center gap-1.5">
+            {tab.label}
+            {tab.alert ? (
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full border border-ink bg-terracotta" />
+              </span>
+            ) : null}
+          </span>
           {typeof tab.count === "number" ? (
             <span
               className={cn(
-                "inline-flex min-w-[18px] items-center justify-center border px-1 font-mono text-[9px]",
-                tab.active ? "border-cream/40 text-butter" : "border-ink/25 text-ink-soft",
+                "inline-flex min-w-[18px] items-center justify-center border px-1 font-mono text-[9px] font-bold",
+                tab.alert
+                  ? "border-ink bg-terracotta text-paper"
+                  : tab.active
+                    ? "border-cream/40 text-butter"
+                    : "border-ink/25 text-ink-soft",
               )}
             >
               {tab.count}

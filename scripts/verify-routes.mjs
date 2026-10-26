@@ -151,6 +151,7 @@ if (adminEmail && adminPassword) {
     ["/admin/employees", "Tambah karyawan"],
     ["/admin/reports", "Laporan penjualan"],
     ["/admin/settings", "Identitas toko"],
+    ["/admin/logs", "Log Aktivitas"],
   ];
 
   for (const [path, marker] of adminPages) {

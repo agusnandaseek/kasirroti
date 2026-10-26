@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClipboardList, ShoppingBasket, Ticket } from "lucide-react";
+import { usePreorderAlerts } from "@/components/layout/preorder-alert-provider";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -13,6 +14,7 @@ const LINKS = [
 
 export function CashierNav() {
   const pathname = usePathname();
+  const { totalAlerts, pendingCount, dueSoonCount } = usePreorderAlerts();
 
   return (
     <nav
@@ -21,6 +23,7 @@ export function CashierNav() {
     >
       {LINKS.map((link) => {
         const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+        const isPreorder = link.href.includes("preorder");
         return (
           <Link
             key={link.href}
@@ -33,16 +36,39 @@ export function CashierNav() {
             )}
             aria-current={active ? "page" : undefined}
           >
-            <link.icon
-              className={cn(
-                "size-[18px] shrink-0 transition sm:size-4",
-                active ? "text-butter" : "text-ink-soft group-hover:text-ink",
-              )}
-              strokeWidth={2.8}
-            />
-            <span className="font-mono text-[9px] font-bold uppercase leading-none tracking-[0.06em] sm:text-[10px] sm:tracking-[0.12em]">
-              {link.label}
+            <span className="relative">
+              <link.icon
+                className={cn(
+                  "size-[18px] shrink-0 transition sm:size-4",
+                  active ? "text-butter" : "text-ink-soft group-hover:text-ink",
+                )}
+                strokeWidth={2.8}
+              />
+              {isPreorder && totalAlerts > 0 ? (
+                <span className="absolute -right-1 -top-1 flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full border border-ink bg-terracotta" />
+                </span>
+              ) : null}
             </span>
+
+            <span className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase leading-none tracking-[0.06em] sm:text-[10px] sm:tracking-[0.12em]">
+              {link.label}
+              {isPreorder && totalAlerts > 0 ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center justify-center border px-1 font-mono text-[8px] font-bold",
+                    active
+                      ? "border-cream/40 bg-terracotta text-paper"
+                      : "border-ink bg-terracotta text-paper",
+                  )}
+                  title={`${pendingCount} menunggu konfirmasi, ${dueSoonCount} perlu dibuat`}
+                >
+                  {totalAlerts}
+                </span>
+              ) : null}
+            </span>
+
             {active ? (
               <span
                 aria-hidden

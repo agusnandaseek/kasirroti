@@ -7,6 +7,7 @@ import { EllipsisVertical, ExternalLink, LogOut, X } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { ADMIN_NAV_GROUPS, isAdminNavActive } from "@/lib/admin-nav";
+import { usePreorderAlerts } from "@/components/layout/preorder-alert-provider";
 import { cn } from "@/lib/utils";
 
 export function AdminMobileMenu({
@@ -21,6 +22,7 @@ export function AdminMobileMenu({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { totalAlerts } = usePreorderAlerts();
 
   useEffect(() => {
     if (!open) return;
@@ -57,7 +59,7 @@ export function AdminMobileMenu({
         className={buttonClasses({
           variant: open ? "ink" : "secondary",
           size: "sm",
-          className: "size-9 px-0",
+          className: "relative size-9 px-0",
         })}
       >
         {open ? (
@@ -65,6 +67,12 @@ export function AdminMobileMenu({
         ) : (
           <EllipsisVertical className="size-4" strokeWidth={3} />
         )}
+        {!open && totalAlerts > 0 ? (
+          <span className="absolute -right-1 -top-1 flex size-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full border border-ink bg-terracotta" />
+          </span>
+        ) : null}
       </button>
 
       {open ? (
@@ -96,6 +104,7 @@ export function AdminMobileMenu({
                 <div className="space-y-1">
                   {group.links.map((link) => {
                     const active = isAdminNavActive(pathname, link.href);
+                    const isPreorder = link.href.includes("preorder");
                     return (
                       <Link
                         key={link.href}
@@ -109,12 +118,24 @@ export function AdminMobileMenu({
                             : "border-transparent text-ink-soft hover:border-ink hover:bg-butter-soft",
                         )}
                       >
-                        <link.icon
-                          className={cn("size-3.5", active ? "text-butter" : "text-muted")}
-                          strokeWidth={2.8}
-                        />
+                        <span className="relative">
+                          <link.icon
+                            className={cn("size-3.5", active ? "text-butter" : "text-muted")}
+                            strokeWidth={2.8}
+                          />
+                          {isPreorder && totalAlerts > 0 ? (
+                            <span className="absolute -right-1 -top-1 flex size-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+                              <span className="relative inline-flex size-2 rounded-full border border-ink bg-terracotta" />
+                            </span>
+                          ) : null}
+                        </span>
                         {link.label}
-                        {active ? (
+                        {isPreorder && totalAlerts > 0 ? (
+                          <span className="ml-auto border border-ink bg-terracotta px-1.5 py-0.5 text-[8px] font-bold text-paper">
+                            {totalAlerts}
+                          </span>
+                        ) : active ? (
                           <span aria-hidden className="ml-auto size-1.5 rounded-full bg-butter" />
                         ) : null}
                       </Link>
@@ -125,32 +146,35 @@ export function AdminMobileMenu({
             ))}
           </nav>
 
-          <div className="grid grid-cols-2 gap-2 border-t-[3px] border-ink bg-cream/50 p-2.5">
-            <Link
-              href="/cashier/pos"
-              onClick={() => setOpen(false)}
-              className={buttonClasses({
-                variant: "secondary",
-                size: "sm",
-                className: "w-full px-2 text-[8px]",
-              })}
-            >
-              <ExternalLink className="size-3" strokeWidth={3} />
-              Kasir
-            </Link>
-            <form action={logoutAction}>
-              <button
-                type="submit"
+          <div className="border-t-[3px] border-ink bg-cream p-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/cashier/pos"
+                onClick={() => setOpen(false)}
                 className={buttonClasses({
-                  variant: "danger",
+                  variant: "secondary",
                   size: "sm",
-                  className: "w-full px-2 text-[8px]",
+                  className: "h-8 px-2 text-[9px]",
                 })}
               >
-                <LogOut className="size-3" strokeWidth={3} />
-                Keluar
-              </button>
-            </form>
+                <ExternalLink className="size-3" strokeWidth={3} />
+                Area kasir
+              </Link>
+
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  className={buttonClasses({
+                    variant: "secondary",
+                    size: "sm",
+                    className: "h-8 w-full px-2 text-[9px]",
+                  })}
+                >
+                  <LogOut className="size-3" strokeWidth={3} />
+                  Keluar
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       ) : null}
