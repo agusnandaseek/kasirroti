@@ -52,46 +52,45 @@ export function TurnstileWidget({
   const [token, setToken] = useState("");
   const [loaded, setLoaded] = useState(false);
 
+  // Store latest callbacks in a ref to avoid infinite re-render loops
+  const callbacksRef = useRef({ onSuccess, onError, onExpire });
+  useEffect(() => {
+    callbacksRef.current = { onSuccess, onError, onExpire };
+  });
+
   const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
     if (!siteKey) return;
-    const key = siteKey;
+    const currentSiteKey = siteKey;
 
     let isMounted = true;
 
     function renderWidget() {
       if (!isMounted || !containerRef.current || !window.turnstile) return;
 
-      // Clean up previous widget if already rendered
-      if (widgetIdRef.current) {
-        try {
-          window.turnstile.remove(widgetIdRef.current);
-        } catch {
-          // ignore
-        }
-        widgetIdRef.current = null;
-      }
+      // Avoid re-rendering if this widget instance is already rendered
+      if (widgetIdRef.current) return;
 
       try {
         const id = window.turnstile.render(containerRef.current, {
-          sitekey: key,
+          sitekey: currentSiteKey,
           action,
           theme,
           callback: (receivedToken: string) => {
             if (!isMounted) return;
             setToken(receivedToken);
-            onSuccess?.(receivedToken);
+            callbacksRef.current.onSuccess?.(receivedToken);
           },
           "error-callback": (err?: string) => {
             if (!isMounted) return;
             setToken("");
-            onError?.(err);
+            callbacksRef.current.onError?.(err);
           },
           "expired-callback": () => {
             if (!isMounted) return;
             setToken("");
-            onExpire?.();
+            callbacksRef.current.onExpire?.();
           },
         });
         widgetIdRef.current = id;
@@ -101,20 +100,22 @@ export function TurnstileWidget({
       }
     }
 
-    // Check if script is already present
     if (window.turnstile) {
       renderWidget();
     } else {
+      // Setup global callback before loading script
+      window.onTurnstileLoaded = () => {
+        if (isMounted) renderWidget();
+      };
+
       const existingScript = document.getElementById(SCRIPT_ID);
       if (!existingScript) {
         const script = document.createElement("script");
         script.id = SCRIPT_ID;
-        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoaded";
         script.async = true;
         script.defer = true;
-        script.onload = () => {
-          renderWidget();
-        };
         document.head.appendChild(script);
       } else {
         existingScript.addEventListener("load", renderWidget);
@@ -132,7 +133,7 @@ export function TurnstileWidget({
         widgetIdRef.current = null;
       }
     };
-  }, [siteKey, action, theme, onSuccess, onError, onExpire]);
+  }, [siteKey, action, theme]);
 
   if (!siteKey) {
     return (
