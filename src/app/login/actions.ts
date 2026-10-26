@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import { loginSchema } from "@/lib/validation/schemas";
 import { actionFail, type ActionResult } from "@/lib/errors";
 
@@ -13,6 +14,12 @@ export async function loginAction(
   _previous: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
+  const turnstileToken = formData.get("cf-turnstile-response") as string | null;
+  const turnstileCheck = await verifyTurnstileToken(turnstileToken);
+  if (!turnstileCheck.success) {
+    return actionFail(turnstileCheck.error, "CAPTCHA_FAILED");
+  }
+
   if (!(await checkRateLimit("login", 20, 300))) {
     return actionFail("Terlalu banyak percobaan masuk. Tunggu 5 menit lalu coba lagi.");
   }
@@ -64,5 +71,3 @@ export async function logoutAction() {
   await supabase.auth.signOut();
   redirect("/login");
 }
-
-

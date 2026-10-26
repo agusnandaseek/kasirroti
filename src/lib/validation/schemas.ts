@@ -55,6 +55,7 @@ export const preorderSchema = z.object({
     .datetime({ offset: true, message: "Jadwal pengambilan tidak valid." }),
   idempotencyKey: uuid,
   company: z.string().max(200).optional().default(""),
+  turnstileToken: z.string().optional(),
 });
 
 export const orderIdSchema = z.object({ orderId: uuid });

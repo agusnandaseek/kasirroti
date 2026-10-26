@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSettings } from "@/lib/data/settings";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import { deriveTrackingCode, hashTrackingCode } from "@/lib/tokens";
 import { isValidPickupSlot } from "@/lib/slots";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -37,6 +38,11 @@ export async function createPreorderAction(
     const parsed = preorderSchema.safeParse(input);
     if (!parsed.success) {
       return actionFail(parsed.error.issues[0]?.message ?? "Data pre-order tidak valid.");
+    }
+
+    const turnstileCheck = await verifyTurnstileToken(parsed.data.turnstileToken);
+    if (!turnstileCheck.success) {
+      return actionFail(turnstileCheck.error, "CAPTCHA_FAILED");
     }
 
     if (parsed.data.company.trim().length > 0) {

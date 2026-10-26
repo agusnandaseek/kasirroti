@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Eye, EyeOff, LogIn, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { loginAction, type LoginState } from "./actions";
 
 export function LoginForm() {
@@ -11,6 +12,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [hasTurnstileToken, setHasTurnstileToken] = useState(false);
 
   return (
     <div className="mt-7">
@@ -57,6 +59,16 @@ export function LoginForm() {
           </div>
         </Field>
 
+        {/* Cloudflare Turnstile Verification */}
+        <div className="pt-1">
+          <TurnstileWidget
+            action="login"
+            onSuccess={() => setHasTurnstileToken(true)}
+            onExpire={() => setHasTurnstileToken(false)}
+            onError={() => setHasTurnstileToken(false)}
+          />
+        </div>
+
         {state && !state.ok ? (
           <div
             role="alert"
@@ -67,7 +79,13 @@ export function LoginForm() {
           </div>
         ) : null}
 
-        <Button type="submit" size="lg" className="w-full" loading={pending}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          loading={pending}
+          disabled={pending}
+        >
           {pending ? "Memeriksa…" : "Masuk ke POS"}
           {!pending ? <LogIn className="size-4" strokeWidth={3} /> : null}
         </Button>

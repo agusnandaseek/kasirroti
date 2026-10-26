@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/field";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { createPreorderAction, type PreorderReceipt } from "@/app/preorder/actions";
 import { formatIDR } from "@/lib/format";
 import { formatSlotLabel, buildPickupDays, type PickupDay } from "@/lib/slots";
@@ -51,6 +52,7 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
   const [selectedSlot, setSelectedSlot] = useState(initialDays[0]?.slots[0]?.value ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<PreorderReceipt | null>(null);
   const idempotencyKey = useRef("");
@@ -122,6 +124,12 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Verifikasi keamanan Cloudflare Turnstile sedang diproses atau belum selesai. Silakan coba sesaat lagi.");
+      summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     if (!idempotencyKey.current) {
       idempotencyKey.current = crypto.randomUUID();
     }
@@ -139,6 +147,7 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
         pickupAt: selectedSlot,
         idempotencyKey: idempotencyKey.current,
         company: honeypot,
+        turnstileToken,
       });
 
       if (!result.ok) {
@@ -147,6 +156,7 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
       }
 
       idempotencyKey.current = "";
+      setTurnstileToken("");
       setReceipt(result.data);
       window.scrollTo({ top: 0, behavior: "smooth" });
       router.refresh();
@@ -164,6 +174,7 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
       setName("");
       setEmail("");
       setPhone("");
+      setTurnstileToken("");
       setErrors({});
       setError(null);
       const next = buildPickupDays(settings, new Date());
@@ -506,6 +517,16 @@ export function PreorderForm({ products, settings, initialDays }: Props) {
                 {error}
               </div>
             ) : null}
+
+            {/* Cloudflare Turnstile Verification */}
+            <div className="pt-2">
+              <TurnstileWidget
+                action="preorder"
+                onSuccess={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken("")}
+                onError={() => setTurnstileToken("")}
+              />
+            </div>
 
             <Button
               type="submit"
