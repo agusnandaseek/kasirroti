@@ -7,8 +7,9 @@ async function getClientKey(scope: string) {
   const headerStore = await headers();
   const forwarded = headerStore.get("x-forwarded-for");
   const ip =
-    forwarded?.split(",")[0]?.trim() ||
+    headerStore.get("x-vercel-forwarded-for") ||
     headerStore.get("x-real-ip") ||
+    forwarded?.split(",")[0]?.trim() ||
     "local-development";
 
   const digest = createHash("sha256").update(ip).digest("hex").slice(0, 20);

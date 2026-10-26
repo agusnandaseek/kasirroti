@@ -42,6 +42,9 @@ yarn-error.log*
 /test-results
 /playwright-report
 
+# security & scans
+strix_runs/
+
 # vercel
 .vercel
 
