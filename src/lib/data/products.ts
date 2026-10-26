@@ -11,6 +11,7 @@ type ProductRow = {
   cost_price: number | string | null;
   image_url: string | null;
   is_available: boolean;
+  stock?: number | string | null;
 };
 
 function mapProduct(row: ProductRow): ProductView {
@@ -22,13 +23,14 @@ function mapProduct(row: ProductRow): ProductView {
     costPrice: row.cost_price == null ? null : Number(row.cost_price),
     imageUrl: row.image_url,
     isAvailable: row.is_available,
+    stock: Math.max(0, Number(row.stock ?? 0)),
   };
 }
 
 export const listProducts = cache(async (options: { availableOnly?: boolean } = {}) => {
   let query = getAdminClient()
     .from("products")
-    .select("id, name, description, price, cost_price, image_url, is_available")
+    .select("id, name, description, price, cost_price, image_url, is_available, stock")
     .order("name", { ascending: true });
 
   if (options.availableOnly) {
@@ -44,7 +46,7 @@ export const listProducts = cache(async (options: { availableOnly?: boolean } = 
 export const getProduct = cache(async (id: string) => {
   const { data, error } = await getAdminClient()
     .from("products")
-    .select("id, name, description, price, cost_price, image_url, is_available")
+    .select("id, name, description, price, cost_price, image_url, is_available, stock")
     .eq("id", id)
     .maybeSingle<ProductRow>();
 

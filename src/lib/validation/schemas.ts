@@ -111,6 +111,12 @@ export const productSchema = z.object({
       (value) => value === null || /^https?:\/\/.+/i.test(value),
       "URL foto harus diawali http:// atau https://.",
     ),
+  stock: z.coerce
+    .number()
+    .int("Stok harus bilangan bulat.")
+    .min(0, "Stok tidak boleh negatif.")
+    .max(100_000, "Stok maksimal 100.000.")
+    .default(0),
   isAvailable: checkbox,
 });
 

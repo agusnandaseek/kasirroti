@@ -40,6 +40,7 @@ export type ProductView = {
   costPrice: number | null;
   imageUrl: string | null;
   isAvailable: boolean;
+  stock: number;
 };
 
 export type OrderItemView = {

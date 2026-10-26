@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   CalendarClock,
+  History,
   Mail,
   Phone,
   Search,
@@ -31,57 +32,83 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const TABS: { value: OrderStatus | "all"; label: string }[] = [
-  { value: "all", label: "Semua" },
+const ACTIVE_TABS: { value: OrderStatus | "all"; label: string }[] = [
+  { value: "all", label: "Semua Aktif" },
   { value: "pending_confirmation", label: "Menunggu" },
   { value: "confirmed", label: "Terkonfirmasi" },
   { value: "queued", label: "Antrean" },
-  { value: "ready", label: "Siap" },
-  { value: "completed", label: "Selesai" },
+  { value: "ready", label: "Siap Diambil" },
 ];
 
-const ALLOWED = new Set<string>(TABS.map((tab) => tab.value));
+const HISTORY_TABS: { value: OrderStatus | "all"; label: string }[] = [
+  { value: "all", label: "Semua Riwayat" },
+  { value: "completed", label: "Selesai" },
+  { value: "rejected", label: "Ditolak" },
+  { value: "cancelled", label: "Dibatalkan" },
+];
 
-function parseStatus(value?: string): OrderStatus | "all" {
-  return value && ALLOWED.has(value) ? (value as OrderStatus) : "all";
-}
-
-function buildQuery(input: { status?: string; from?: string; to?: string; q?: string }) {
+function buildQuery(input: {
+  view?: "active" | "history";
+  status?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+}) {
   const params = new URLSearchParams();
+  if (input.view && input.view !== "active") params.set("view", input.view);
   if (input.status && input.status !== "all") params.set("status", input.status);
   if (input.from) params.set("from", input.from);
   if (input.to) params.set("to", input.to);
   if (input.q) params.set("q", input.q);
-  return params.toString();
+  const qStr = params.toString();
+  return qStr ? `?${qStr}` : "";
 }
 
 export default async function AdminPreordersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; from?: string; to?: string; q?: string }>;
+  searchParams: Promise<{ view?: string; status?: string; from?: string; to?: string; q?: string }>;
 }) {
   await requireRole(["admin"]);
   const params = await searchParams;
   const settings = await getSettings();
-  const status = parseStatus(params.status);
+
+  const isHistoryView = params.view === "history";
+  const viewScope: "active" | "history" = isHistoryView ? "history" : "active";
+
+  const allowedTabs = isHistoryView ? HISTORY_TABS : ACTIVE_TABS;
+  const allowedSet = new Set<string>(allowedTabs.map((t) => t.value));
+
+  const status: OrderStatus | "all" =
+    params.status && allowedSet.has(params.status) ? (params.status as OrderStatus) : "all";
+
   const fromKey = isDateKey(params.from) ? params.from : "";
   const toKey = isDateKey(params.to) ? params.to : "";
   const q = (params.q ?? "").slice(0, 60);
 
   const orders = await listAdminPreorders({
     status,
+    scope: viewScope,
     q,
     from: fromKey ? zonedTimeToUtc(`${fromKey} 00:00:00`, settings.timezone) : undefined,
     to: toKey ? zonedTimeToUtc(`${shiftDateKey(toKey, 1)} 00:00:00`, settings.timezone) : undefined,
   });
 
-  const pending = orders.filter((order) => order.status === "pending_confirmation").length;
+  const pendingCount = isHistoryView
+    ? 0
+    : orders.filter((order) => order.status === "pending_confirmation").length;
 
-  const tabs = TABS.map((tab) => ({
-    href: `/admin/preorders${buildQuery({ status: tab.value, from: fromKey, to: toKey, q }) ? `?${buildQuery({ status: tab.value, from: fromKey, to: toKey, q })}` : ""}`,
+  const tabs = allowedTabs.map((tab) => ({
+    href: `/admin/preorders${buildQuery({
+      view: viewScope,
+      status: tab.value,
+      from: fromKey,
+      to: toKey,
+      q,
+    })}`,
     label: tab.label,
     active: status === tab.value,
-    alert: tab.value === "pending_confirmation" && pending > 0,
+    alert: tab.value === "pending_confirmation" && pendingCount > 0,
   }));
 
   return (
@@ -90,35 +117,72 @@ export default async function AdminPreordersPage({
         eyebrow="Pre-order"
         title="Kelola pre-order"
         actions={
-          <Link
-            href="/preorder"
-            target="_blank"
-            className={buttonClasses({ variant: "secondary", size: "sm" })}
-          >
-            Form publik
-            <ArrowUpRight className="size-3.5" strokeWidth={3} />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/preorder"
+              target="_blank"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              Form publik
+              <ArrowUpRight className="size-3.5" strokeWidth={3} />
+            </Link>
+          </div>
         }
       />
+
+      {/* Primary Scope Toggle: Pre-order Aktif vs Riwayat Pre-order */}
+      <div className="flex flex-wrap items-center gap-2 border-b-[3px] border-ink pb-3">
+        <Link
+          href={`/admin/preorders${buildQuery({ view: "active", from: fromKey, to: toKey, q })}`}
+          className={cn(
+            "flex items-center gap-2 border-[3px] border-ink px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] transition shadow-hard-sm",
+            !isHistoryView
+              ? "bg-butter text-ink"
+              : "bg-paper text-muted hover:bg-cream/70 hover:text-ink",
+          )}
+        >
+          <Timer className="size-4" strokeWidth={2.8} />
+          Pre-order Aktif
+          {pendingCount > 0 ? (
+            <span className="flex size-5 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-cream">
+              {pendingCount}
+            </span>
+          ) : null}
+        </Link>
+
+        <Link
+          href={`/admin/preorders${buildQuery({ view: "history", from: fromKey, to: toKey, q })}`}
+          className={cn(
+            "flex items-center gap-2 border-[3px] border-ink px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] transition shadow-hard-sm",
+            isHistoryView
+              ? "bg-butter text-ink"
+              : "bg-paper text-muted hover:bg-cream/70 hover:text-ink",
+          )}
+        >
+          <History className="size-4" strokeWidth={2.8} />
+          Riwayat Pre-order (Selesai/Arsip)
+        </Link>
+      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <FilterTabs tabs={tabs} />
         <div className="flex flex-wrap items-center gap-2">
-          {pending > 0 ? (
+          {pendingCount > 0 ? (
             <Badge tone="terracotta">
               <TriangleAlert className="size-3" strokeWidth={3} />
-              {pending} menunggu konfirmasi
+              {pendingCount} menunggu konfirmasi
             </Badge>
           ) : (
             <Badge tone="outline">
               <Timer className="size-3" strokeWidth={3} />
-              {orders.length} pre-order
+              {orders.length} {isHistoryView ? "riwayat pre-order" : "pre-order aktif"}
             </Badge>
           )}
         </div>
       </div>
 
       <form method="get" className="border-[3px] border-ink bg-paper p-4 shadow-hard-sm">
+        {isHistoryView ? <input type="hidden" name="view" value="history" /> : null}
         {status !== "all" ? <input type="hidden" name="status" value={status} /> : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12">
           <Field label="Ambil dari" htmlFor="from" className="lg:col-span-3">
@@ -148,10 +212,17 @@ export default async function AdminPreordersPage({
       {orders.length === 0 ? (
         <EmptyState
           icon={<Ticket className="size-6" strokeWidth={2.6} />}
-          title="Tidak ada pre-order"
-          description="Belum ada pre-order yang cocok dengan filter ini. Pre-order baru dari halaman publik akan muncul di sini."
+          title={isHistoryView ? "Tidak ada riwayat pre-order" : "Tidak ada pre-order aktif"}
+          description={
+            isHistoryView
+              ? "Belum ada pre-order yang telah selesai atau dibatalkan sesuai filter pencarian ini."
+              : "Belum ada pre-order aktif. Pre-order baru dari halaman publik atau kasir akan muncul di sini."
+          }
           action={
-            <Link href="/admin/preorders" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+            <Link
+              href={isHistoryView ? "/admin/preorders?view=history" : "/admin/preorders"}
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
               Reset filter
             </Link>
           }
@@ -288,12 +359,12 @@ function PreorderRow({
           <div
             className={cn(
               "border-2 border-ink px-2.5 py-2",
-              overdue ? "bg-[#fdeae6]" : "bg-butter-soft",
+              overdue && order.status !== "completed" ? "bg-[#fdeae6]" : "bg-butter-soft",
             )}
           >
             <p className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.12em]">
               <CalendarClock className="size-3" strokeWidth={3} />
-              {overdue ? "Jadwal lewat" : "Jadwal pengambilan"}
+              {overdue && order.status !== "completed" ? "Jadwal lewat" : "Jadwal pengambilan"}
             </p>
             <p className="mt-1 text-xs font-bold">
               {order.pickupAt ? formatDateTime(order.pickupAt, timezone) : "—"}

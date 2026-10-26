@@ -224,22 +224,35 @@ export async function listSales(filters: SalesFilters): Promise<OrderView[]> {
 
 export async function listAdminPreorders(filters: {
   status?: OrderStatus | "all";
+  scope?: "active" | "history" | "all";
   q?: string;
   from?: Date;
   to?: Date;
   limit?: number;
 }): Promise<OrderView[]> {
+  const scope = filters.scope ?? "active";
+
   function baseQuery() {
     let query = getAdminClient()
       .from("orders")
       .select(ORDER_SELECT)
       .eq("order_type", "pre_order")
-      .order("pickup_at", { ascending: true, nullsFirst: false })
+      .order("pickup_at", { ascending: scope !== "history", nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(filters.limit ?? 200);
 
     if (filters.status && filters.status !== "all") {
       query = query.eq("order_status", filters.status);
+    } else if (scope === "active") {
+      query = query.in("order_status", [
+        "pending_confirmation",
+        "confirmed",
+        "queued",
+        "preparing",
+        "ready",
+      ]);
+    } else if (scope === "history") {
+      query = query.in("order_status", ["completed", "rejected", "cancelled"]);
     }
 
     if (filters.from) query = query.gte("pickup_at", filters.from.toISOString());

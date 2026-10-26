@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ImageOff,
+  Minus,
   Package,
   Pencil,
   Plus,
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  adjustProductStockAction,
   createProductAction,
   toggleProductAvailabilityAction,
   updateProductAction,
@@ -43,6 +45,7 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
   const [editing, setEditing] = useState<ProductView | null>(null);
   const [pending, setPending] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -109,15 +112,39 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
     router.refresh();
   }
 
-  const available = products.filter((product) => product.isAvailable).length;
+  async function handleAdjustStock(product: ProductView, delta: number) {
+    if (adjustingId) return;
+    setAdjustingId(product.id);
+    const result = await adjustProductStockAction(product.id, delta);
+    setAdjustingId(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(
+      `Stok ${product.name}: ${result.data.stock} item ${
+        result.data.stock <= 0 ? "(Stok habis)" : ""
+      }`,
+    );
+    router.refresh();
+  }
+
+  const available = products.filter((product) => product.isAvailable && product.stock > 0).length;
+  const outOfStock = products.filter((product) => product.stock <= 0).length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="mint">{available} tersedia</Badge>
+          <Badge tone="mint">{available} siap jual</Badge>
+          {outOfStock > 0 ? (
+            <Badge tone="terracotta">{outOfStock} stok habis</Badge>
+          ) : null}
           <Badge tone="outline">{products.length} total produk</Badge>
         </div>
+
         <Button type="button" size="sm" onClick={openCreate}>
           <Plus className="size-3.5" strokeWidth={3.5} />
           Tambah produk
@@ -162,62 +189,113 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
                 key={product.id}
                 className="min-w-0 border-[3px] border-ink bg-paper shadow-hard-sm"
               >
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(expanded ? null : product.id)}
-                  aria-expanded={expanded}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-cream/40"
-                >
-                  <div className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden border-2 border-ink bg-butter-soft">
-                    {product.imageUrl ? (
-                      <Image
-                        src={product.imageUrl}
-                        alt={product.name}
-                        fill
-                        sizes="40px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <ImageOff className="size-4 text-muted" strokeWidth={2.4} />
-                    )}
-                  </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : product.id)}
+                    aria-expanded={expanded}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-80"
+                  >
+                    <div className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden border-2 border-ink bg-butter-soft">
+                      {product.imageUrl ? (
+                        <Image
+                          src={product.imageUrl}
+                          alt={product.name}
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <ImageOff className="size-4 text-muted" strokeWidth={2.4} />
+                      )}
+                    </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold leading-tight">{product.name}</p>
-                    <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                      {product.isAvailable ? "Tersedia" : "Nonaktif"}
-                      <span className="text-muted/50"> · </span>
-                      {product.costPrice == null
-                        ? "Modal belum diisi"
-                        : `Modal ${formatIDR(product.costPrice)}`}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <p className="font-mono text-xs font-bold">{formatIDR(product.price)}</p>
-                    {margin != null ? (
-                      <p
-                        className={cn(
-                          "mt-0.5 font-mono text-[9px] font-semibold",
-                          margin >= 0 ? "text-mint" : "text-danger",
-                        )}
-                      >
-                        Untung {formatIDR(margin)}
-                        {marginPercent != null ? ` · ${marginPercent}%` : ""}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold leading-tight">{product.name}</p>
+                      <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+                        {product.isAvailable ? "Aktif" : "Nonaktif"}
+                        <span className="text-muted/50"> · </span>
+                        {product.costPrice == null
+                          ? "Modal belum diisi"
+                          : `Modal ${formatIDR(product.costPrice)}`}
                       </p>
-                    ) : (
-                      <p className="mt-0.5 font-mono text-[9px] text-muted/70">—</p>
-                    )}
-                  </div>
+                    </div>
 
-                  <ChevronDown
-                    className={cn(
-                      "size-4 shrink-0 text-muted transition-transform",
-                      expanded && "rotate-180",
-                    )}
-                    strokeWidth={3}
-                  />
-                </button>
+                    <div className="shrink-0 text-right">
+                      <p className="font-mono text-xs font-bold">{formatIDR(product.price)}</p>
+                      {margin != null ? (
+                        <p
+                          className={cn(
+                            "mt-0.5 font-mono text-[9px] font-semibold",
+                            margin >= 0 ? "text-mint" : "text-danger",
+                          )}
+                        >
+                          Untung {formatIDR(margin)}
+                          {marginPercent != null ? ` · ${marginPercent}%` : ""}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 font-mono text-[9px] text-muted/70">—</p>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Quick Action Stock Controls */}
+                  <div
+                    className="flex items-center gap-1.5 border-l-2 border-dashed border-ink/25 pl-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustStock(product, -1)}
+                      disabled={adjustingId === product.id || product.stock <= 0}
+                      className="flex size-7 items-center justify-center border-2 border-ink bg-paper font-bold transition hover:bg-cream disabled:opacity-30"
+                      title="Kurangi stok (-1)"
+                      aria-label={`Kurangi stok ${product.name}`}
+                    >
+                      <Minus className="size-3" strokeWidth={3.5} />
+                    </button>
+                    <div
+                      className={cn(
+                        "flex min-w-10 flex-col items-center justify-center border-2 border-ink px-1.5 py-0.5 text-center font-mono",
+                        product.stock <= 0
+                          ? "bg-[#fdeae6] text-danger"
+                          : product.stock < 5
+                            ? "bg-butter text-ink"
+                            : "bg-paper text-ink",
+                      )}
+                    >
+                      <span className="text-xs font-bold leading-tight">{product.stock}</span>
+                      <span className="text-[7px] uppercase tracking-wider text-muted">
+                        {product.stock <= 0 ? "Habis" : "Stok"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustStock(product, 1)}
+                      disabled={adjustingId === product.id}
+                      className="flex size-7 items-center justify-center border-2 border-ink bg-butter font-bold transition hover:bg-[#ffd35c] disabled:opacity-30"
+                      title="Tambah stok (+1)"
+                      aria-label={`Tambah stok ${product.name}`}
+                    >
+                      <Plus className="size-3" strokeWidth={3.5} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(expanded ? null : product.id)}
+                      className="ml-1 p-1 text-muted hover:text-ink"
+                      aria-label="Buka detail produk"
+                    >
+                      <ChevronDown
+                        className={cn(
+                          "size-4 shrink-0 transition-transform",
+                          expanded && "rotate-180",
+                        )}
+                        strokeWidth={3}
+                      />
+                    </button>
+                  </div>
+                </div>
 
                 {expanded ? (
                   <div className="border-t-2 border-dashed border-ink/25 px-3 py-3">
@@ -241,8 +319,18 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
                           {product.description ?? "Tanpa deskripsi."}
                         </p>
 
-                        <dl className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                        <dl className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
                           {[
+                            {
+                              label: "Stok tersedia",
+                              value: `${product.stock} item`,
+                              tone:
+                                product.stock <= 0
+                                  ? "text-danger"
+                                  : product.stock < 5
+                                    ? "text-amber-700"
+                                    : "text-mint",
+                            },
                             { label: "Harga jual", value: formatIDR(product.price) },
                             {
                               label: "Harga modal",
@@ -267,7 +355,12 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
                               <dt className="font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
                                 {item.label}
                               </dt>
-                              <dd className="mt-0.5 truncate font-mono text-[10px] font-bold">
+                              <dd
+                                className={cn(
+                                  "mt-0.5 truncate font-mono text-[10px] font-bold",
+                                  item.tone,
+                                )}
+                              >
                                 {item.value}
                               </dd>
                             </div>
@@ -275,8 +368,42 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
                         </dl>
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <Badge tone={product.isAvailable ? "mint" : "muted"}>
-                            {product.isAvailable ? "Tersedia" : "Nonaktif"}
+                          {/* Quick bulk stock actions */}
+                          <div className="flex items-center gap-1 border-2 border-ink bg-paper p-1">
+                            <span className="px-1 font-mono text-[8px] font-bold uppercase text-muted">
+                              Tambah stok:
+                            </span>
+                            {[
+                              { label: "+5", delta: 5 },
+                              { label: "+10", delta: 10 },
+                              { label: "+20", delta: 20 },
+                            ].map((btn) => (
+                              <button
+                                key={btn.label}
+                                type="button"
+                                onClick={() => handleAdjustStock(product, btn.delta)}
+                                disabled={adjustingId === product.id}
+                                className="border border-ink bg-butter-soft px-1.5 py-0.5 font-mono text-[9px] font-bold transition hover:bg-butter disabled:opacity-40"
+                              >
+                                {btn.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          <Badge
+                            tone={
+                              product.stock <= 0
+                                ? "terracotta"
+                                : product.isAvailable
+                                  ? "mint"
+                                  : "muted"
+                            }
+                          >
+                            {product.stock <= 0
+                              ? "Stok Habis"
+                              : product.isAvailable
+                                ? "Tersedia"
+                                : "Nonaktif"}
                           </Badge>
                           <button
                             type="button"
@@ -325,8 +452,7 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
             </p>
             <DialogTitle>{editing ? editing.name : "Tambah produk"}</DialogTitle>
             <DialogDescription>
-              Harga disimpan sebagai rupiah bulat. Harga modal opsional dan dipakai untuk
-              menghitung keuntungan di laporan.
+              Kelola informasi harga jual, modal, stok fisik, dan ketersediaan barang.
             </DialogDescription>
           </DialogHeader>
 
@@ -357,7 +483,7 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Harga jual (Rp)" htmlFor="price" required>
                 <Input
                   id="price"
@@ -375,7 +501,7 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
               <Field
                 label="Harga modal (Rp)"
                 htmlFor="costPrice"
-                hint="Opsional. Kosongkan jika belum diisi."
+                hint="Opsional"
               >
                 <Input
                   id="costPrice"
@@ -386,6 +512,23 @@ export function ProductsManager({ products }: { products: ProductView[] }) {
                   step={500}
                   defaultValue={editing?.costPrice ?? ""}
                   placeholder="15000"
+                />
+              </Field>
+
+              <Field
+                label="Jumlah Stok"
+                htmlFor="stock"
+                required
+                hint="Stok fisik"
+              >
+                <Input
+                  id="stock"
+                  name="stock"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  defaultValue={editing?.stock ?? 20}
+                  required
                 />
               </Field>
             </div>

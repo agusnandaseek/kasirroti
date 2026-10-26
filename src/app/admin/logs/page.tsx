@@ -1,182 +1,257 @@
 import Link from "next/link";
 import {
-  ArrowRight,
-  Clock3,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
   History,
+  RotateCcw,
   Search,
-  ShieldCheck,
-  User,
-  UserCheck,
 } from "lucide-react";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
-import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { TransactionLogCard } from "@/components/admin/logs/transaction-log-card";
 import { requireRole } from "@/lib/auth";
-import { listActivityLogs } from "@/lib/data/logs";
+import { listTransactionLogs, type TimeRangeFilter } from "@/lib/data/logs";
 import { getSettings } from "@/lib/data/settings";
-import { formatDateTime } from "@/lib/format";
-import type { OrderStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+const TIME_RANGES: { label: string; value: TimeRangeFilter }[] = [
+  { label: "Semua", value: "all" },
+  { label: "Hari Ini", value: "today" },
+  { label: "Kemarin", value: "yesterday" },
+  { label: "7 Hari", value: "7d" },
+  { label: "30 Hari", value: "30d" },
+];
 
 export default async function AdminLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    range?: string;
+    status?: string;
+    page?: string;
+  }>;
 }) {
   await requireRole(["admin"]);
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
+  const timeRange = (params.range as TimeRangeFilter) || "all";
   const status = params.status ?? "all";
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
   const settings = await getSettings();
-  const logs = await listActivityLogs({ q, status });
+  const { logs, totalCount, totalPages } = await listTransactionLogs({
+    q,
+    timeRange,
+    status,
+    page,
+    limit: 10,
+    timezone: settings.timezone,
+  });
+
+  // Helper to construct query params preserving others
+  function buildUrl(overrides: Record<string, string | number | undefined>) {
+    const p = new URLSearchParams();
+    const merged = {
+      q: q || undefined,
+      range: timeRange !== "all" ? timeRange : undefined,
+      status: status !== "all" ? status : undefined,
+      page: page > 1 ? page : undefined,
+      ...overrides,
+    };
+
+    for (const [key, val] of Object.entries(merged)) {
+      if (val !== undefined && val !== "") {
+        p.set(key, String(val));
+      }
+    }
+    const query = p.toString();
+    return `/admin/logs${query ? `?${query}` : ""}`;
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Sistem & Audit"
-        title="Log Aktivitas"
-        actions={<AutoRefresh label="Log auto-refresh" intervalMs={20000} />}
+        title="Log Aktivitas Transaksi"
+        actions={<AutoRefresh label="Auto-refresh" intervalMs={20000} />}
       />
 
-      {/* Filter & Search Bar */}
-      <Card className="p-3 sm:p-4">
-        <form method="GET" className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <Input
-              name="q"
-              defaultValue={q}
-              placeholder="Cari kode order, nama pemesan, nama staf, atau aksi..."
-              className="pl-9"
-            />
-          </div>
-          <div className="flex items-center gap-2">
+      {/* Filter Bar */}
+      <Card className="space-y-4 p-4 sm:p-5">
+        {/* Top: Search and Time Range Tabs */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          {/* Search Input */}
+          <form method="GET" className="flex flex-1 items-center gap-2">
+            {timeRange !== "all" ? (
+              <input type="hidden" name="range" value={timeRange} />
+            ) : null}
+            {status !== "all" ? (
+              <input type="hidden" name="status" value={status} />
+            ) : null}
+
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <Input
+                name="q"
+                defaultValue={q}
+                placeholder="Cari kode order (W-000001, PO-...) atau nama pemesan..."
+                className="pl-9"
+              />
+            </div>
             <button type="submit" className={buttonClasses({ size: "md" })}>
-              Cari Log
+              Cari
             </button>
-            {q ? (
-              <Link href="/admin/logs" className={buttonClasses({ variant: "ghost", size: "md" })}>
-                Reset
+            {q || timeRange !== "all" || status !== "all" ? (
+              <Link
+                href="/admin/logs"
+                className={buttonClasses({ variant: "ghost", size: "md", className: "gap-1 px-2.5" })}
+                title="Reset semua filter"
+              >
+                <RotateCcw className="size-4" />
+                <span className="sr-only sm:not-sr-only">Reset</span>
               </Link>
             ) : null}
+          </form>
+
+          {/* Time Range Filter Buttons */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-muted">
+              <Calendar className="size-3" strokeWidth={2.8} />
+              Waktu:
+            </span>
+            {TIME_RANGES.map((r) => {
+              const active = timeRange === r.value;
+              return (
+                <Link
+                  key={r.value}
+                  href={buildUrl({ range: r.value, page: 1 })}
+                  className={cn(
+                    "border-2 border-ink px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] transition",
+                    active
+                      ? "bg-terracotta text-paper shadow-hard-xs"
+                      : "bg-paper text-ink hover:bg-cream-deep",
+                  )}
+                >
+                  {r.label}
+                </Link>
+              );
+            })}
           </div>
-        </form>
+        </div>
+
+        {/* Bottom: Status Quick Filter */}
+        <div className="flex flex-wrap items-center gap-2 border-t-2 border-dashed border-ink/20 pt-3 text-xs">
+          <span className="font-mono text-[10px] font-bold uppercase text-muted">
+            Status:
+          </span>
+          {[
+            { label: "Semua", value: "all" },
+            { label: "Selesai", value: "completed" },
+            { label: "Siap Diambil", value: "ready" },
+            { label: "Diproses", value: "preparing" },
+            { label: "Dalam Antrean", value: "queued" },
+            { label: "Menunggu Konfirmasi", value: "pending_confirmation" },
+            { label: "Dibatalkan", value: "cancelled" },
+          ].map((s) => {
+            const active = status === s.value;
+            return (
+              <Link
+                key={s.value}
+                href={buildUrl({ status: s.value, page: 1 })}
+                className={cn(
+                  "rounded-full border border-ink/40 px-2 py-0.5 text-[10px] font-semibold transition",
+                  active
+                    ? "bg-ink font-bold text-cream"
+                    : "bg-paper text-ink-soft hover:border-ink hover:text-ink",
+                )}
+              >
+                {s.label}
+              </Link>
+            );
+          })}
+        </div>
       </Card>
 
-      {/* Logs Table / Feed */}
+      {/* Main Content: Grouped Transaction Logs */}
       {logs.length === 0 ? (
         <EmptyState
           icon={<History className="size-6" strokeWidth={2.6} />}
-          title="Tidak ada log ditemukan"
+          title="Tidak ada log transaksi ditemukan"
           description={
-            q
-              ? "Tidak ada aktivitas yang cocok dengan kata kunci pencarian Anda."
-              : "Belum ada aktivitas transaksi atau perubahan status yang tercatat di sistem."
+            q || timeRange !== "all" || status !== "all"
+              ? "Tidak ada transaksi yang cocok dengan filter atau kata kunci Anda."
+              : "Belum ada transaksi yang tercatat di sistem."
           }
         />
       ) : (
-        <div className="border-[3px] border-ink bg-paper shadow-hard-lg">
-          <div className="border-b-[3px] border-ink bg-ink px-4 py-3 font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-cream sm:px-6">
-            Daftar Aktivitas ({logs.length} Kejadian Terakhir)
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+              Menampilkan {logs.length} dari total {totalCount} transaksi
+            </p>
+            <p className="font-mono text-[9px] text-muted">
+              Klik pada transaksi untuk melihat detail kronologi kejadian
+            </p>
           </div>
 
-          <div className="divide-y-2 divide-ink/20">
+          <div className="space-y-3">
             {logs.map((log) => (
-              <div
+              <TransactionLogCard
                 key={log.id}
-                className="flex flex-col gap-3 p-4 transition hover:bg-cream/40 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-              >
-                {/* Left: Time & Action */}
-                <div className="space-y-1 sm:max-w-md">
-                  <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] text-muted">
-                    <span className="inline-flex items-center gap-1 font-bold text-ink">
-                      <Clock3 className="size-3" strokeWidth={2.8} />
-                      {formatDateTime(log.timestamp, settings.timezone)} WIB
-                    </span>
-                    <span>·</span>
-                    <Badge tone="outline" className="text-[8px]">
-                      {log.orderType}
-                    </Badge>
-                  </div>
-
-                  <p className="text-sm font-bold text-ink sm:text-base">{log.actionTitle}</p>
-
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-mono font-bold text-terracotta">{log.orderCode}</span>
-                    <span className="text-muted">({log.customerName})</span>
-                    {log.fromStatus ? (
-                      <span className="font-mono text-[9px] text-muted">
-                        {log.fromStatus} → {log.toStatus}
-                      </span>
-                    ) : (
-                      <StatusBadge status={log.toStatus as OrderStatus} />
-                    )}
-                  </div>
-
-                  {log.notes ? (
-                    <p className="mt-1 font-mono text-[10px] text-ink-soft bg-cream-deep/60 px-2 py-1 border border-ink/20">
-                      Catatan: {log.notes}
-                    </p>
-                  ) : null}
-                </div>
-
-                {/* Right: Actor & Link */}
-                <div className="flex items-center justify-between gap-3 border-t-2 border-dashed border-ink/20 pt-2 sm:border-t-0 sm:pt-0">
-                  <div className="text-left sm:text-right">
-                    <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-muted">
-                      Dilakukan Oleh
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-1.5 sm:justify-end">
-                      {log.actorType === "system" ? (
-                        <ShieldCheck className="size-3.5 text-mint" strokeWidth={2.8} />
-                      ) : log.actorRole === "Admin" ? (
-                        <UserCheck className="size-3.5 text-butter" strokeWidth={2.8} />
-                      ) : (
-                        <User className="size-3.5 text-muted" strokeWidth={2.8} />
-                      )}
-                      <span className="text-xs font-bold text-ink">{log.actorName}</span>
-                      {log.actorRole ? (
-                        <Badge
-                          tone={
-                            log.actorRole === "Admin"
-                              ? "butter"
-                              : log.actorRole === "Kasir"
-                                ? "mint"
-                                : "outline"
-                          }
-                          className="px-1 py-0 text-[8px]"
-                        >
-                          {log.actorRole}
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {log.orderId ? (
-                    <Link
-                      href={`/admin/orders/${log.orderId}`}
-                      className={buttonClasses({
-                        variant: "secondary",
-                        size: "sm",
-                        className: "h-8 px-2 text-[9px]",
-                      })}
-                      title="Lihat detail pesanan ini"
-                    >
-                      <ArrowRight className="size-3.5" strokeWidth={3} />
-                      <span className="sr-only sm:not-sr-only sm:inline">Detail</span>
-                    </Link>
-                  ) : null}
-                </div>
-              </div>
+                log={log}
+                timezone={settings.timezone}
+              />
             ))}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-between border-[3px] border-ink bg-paper p-3 shadow-hard-sm">
+              <Link
+                href={buildUrl({ page: page - 1 })}
+                className={cn(
+                  buttonClasses({
+                    variant: "secondary",
+                    size: "sm",
+                    className: "gap-1 text-xs",
+                  }),
+                  page <= 1 && "pointer-events-none opacity-40",
+                )}
+                aria-disabled={page <= 1}
+              >
+                <ChevronLeft className="size-4" />
+                Sebelumnya
+              </Link>
+
+              <span className="font-mono text-xs font-bold text-ink">
+                Halaman {page} dari {totalPages}
+              </span>
+
+              <Link
+                href={buildUrl({ page: page + 1 })}
+                className={cn(
+                  buttonClasses({
+                    variant: "secondary",
+                    size: "sm",
+                    className: "gap-1 text-xs",
+                  }),
+                  page >= totalPages && "pointer-events-none opacity-40",
+                )}
+                aria-disabled={page >= totalPages}
+              >
+                Selanjutnya
+                <ChevronRight className="size-4" />
+              </Link>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

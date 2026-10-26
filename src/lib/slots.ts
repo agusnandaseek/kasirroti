@@ -76,7 +76,8 @@ export function buildPickupDays(
   const earliest = new Date(now.getTime() + settings.minPreorderMinutes * 60_000);
   const days: PickupDay[] = [];
 
-  for (let offset = 0; offset < dayCount; offset += 1) {
+  // Pre-order hanya dapat dilakukan untuk hari besok (H+1) ke atas, tidak bisa same-day.
+  for (let offset = 1; offset <= dayCount; offset += 1) {
     const dateKey = addDaysToKey(todayKey, offset);
     const weekday = dayOfWeek(dateKey);
     const hours = hoursFor(settings.businessHours, weekday);
@@ -104,7 +105,7 @@ export function buildPickupDays(
       dateKey,
       weekday: WEEKDAYS[weekday],
       dateLabel: `${WEEKDAYS_SHORT[weekday]}, ${dayNumber} ${MONTHS[Number(dateKey.slice(5, 7)) - 1]}`,
-      relativeLabel: offset === 0 ? "Hari ini" : offset === 1 ? "Besok" : null,
+      relativeLabel: offset === 1 ? "Besok" : offset === 2 ? "Lusa" : null,
       slots,
     });
   }

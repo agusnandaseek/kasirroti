@@ -31,24 +31,24 @@ const settings: StoreSettingsView = {
 const MONDAY_MORNING = new Date("2026-10-26T01:00:00.000Z");
 
 describe("buildPickupDays", () => {
-  it("builds 7 days of 30-minute slots inside store hours", () => {
+  it("builds 7 days of 30-minute slots starting from tomorrow (H+1)", () => {
     const days = buildPickupDays(settings, MONDAY_MORNING);
 
     expect(days).toHaveLength(7);
-    expect(days[0].dateKey).toBe("2026-10-26");
-    expect(days[0].weekday).toBe("Senin");
-    expect(days[0].dateLabel).toBe("Sen, 26 Oktober");
-    expect(days[0].relativeLabel).toBe("Hari ini");
-    expect(days[1].relativeLabel).toBe("Besok");
+    expect(days[0].dateKey).toBe("2026-10-27");
+    expect(days[0].weekday).toBe("Selasa");
+    expect(days[0].dateLabel).toBe("Sel, 27 Oktober");
+    expect(days[0].relativeLabel).toBe("Besok");
+    expect(days[1].relativeLabel).toBe("Lusa");
     expect(days[2].relativeLabel).toBeNull();
 
     const slots = days[0].slots;
-    // 08:00 is inside the lead time (now + 60 minutes = 09:00).
-    expect(slots[0].label).toBe("09:00");
-    expect(slots[0].value).toBe("2026-10-26T02:00:00.000Z");
+    // Starts from opening time 08:00 because it's tomorrow
+    expect(slots[0].label).toBe("08:00");
+    expect(slots[0].value).toBe("2026-10-27T01:00:00.000Z");
     expect(slots.at(-1)?.label).toBe("19:30");
-    // 09:00 through 19:30 inclusive.
-    expect(slots).toHaveLength(22);
+    // 08:00 through 19:30 inclusive (24 slots)
+    expect(slots).toHaveLength(24);
   });
 
   it("skips closed weekdays", () => {
@@ -65,12 +65,12 @@ describe("buildPickupDays", () => {
     expect(days.some((day) => day.weekday === "Senin")).toBe(false);
   });
 
-  it("drops days whose slots are all inside the lead time", () => {
-    // 23:30 Jakarta on Monday; the next bookable slot is Tuesday 08:00.
+  it("drops days whose slots are all inside the lead time or in the past", () => {
+    // 23:30 Jakarta on Monday; the next bookable slot starts Tuesday 08:00 (tomorrow).
     const lateNight = new Date("2026-10-26T16:30:00.000Z");
     const days = buildPickupDays(settings, lateNight);
 
-    expect(days).toHaveLength(6);
+    expect(days).toHaveLength(7);
     expect(days[0].dateKey).toBe("2026-10-27");
     expect(days[0].relativeLabel).toBe("Besok");
     expect(days[0].slots[0].label).toBe("08:00");
@@ -104,15 +104,21 @@ describe("buildPickupDays", () => {
 });
 
 describe("isValidPickupSlot", () => {
-  it("accepts a slot from the generated grid", () => {
-    expect(isValidPickupSlot(new Date("2026-10-26T03:00:00.000Z"), settings, MONDAY_MORNING)).toBe(
+  it("accepts a slot from the generated grid starting tomorrow", () => {
+    expect(isValidPickupSlot(new Date("2026-10-27T03:00:00.000Z"), settings, MONDAY_MORNING)).toBe(
       true,
+    );
+  });
+
+  it("rejects sameday slots", () => {
+    expect(isValidPickupSlot(new Date("2026-10-26T03:00:00.000Z"), settings, MONDAY_MORNING)).toBe(
+      false,
     );
   });
 
   it("rejects an offset that is not on the slot grid", () => {
     expect(
-      isValidPickupSlot(new Date("2026-10-26T03:15:00.000Z"), settings, MONDAY_MORNING),
+      isValidPickupSlot(new Date("2026-10-27T03:15:00.000Z"), settings, MONDAY_MORNING),
     ).toBe(false);
   });
 

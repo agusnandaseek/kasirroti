@@ -19,9 +19,17 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input } from "@/components/ui/field";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CopyButton } from "@/components/ui/copy-button";
 import { PaymentBadge } from "@/components/ui/status-badge";
+import { adjustProductStockAction } from "@/app/admin/products/actions";
 import { createWalkinOrderAction, type WalkinReceipt } from "./actions";
 import { formatDateTime, formatIDR } from "@/lib/format";
 import type { PaymentMethod, ProductView } from "@/lib/types";
@@ -50,6 +58,7 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [paidConfirmed, setPaidConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [adjustingStockId, setAdjustingStockId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const idempotencyKey = useRef("");
@@ -77,16 +86,70 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   function setQuantity(productId: string, quantity: number) {
+    const product = products.find((p) => p.id === productId);
+    const maxStock = product ? product.stock : 999;
+
     setCart((current) => {
       const next = { ...current };
-      if (quantity <= 0) delete next[productId];
-      else next[productId] = Math.min(quantity, 999);
+      if (quantity <= 0) {
+        delete next[productId];
+      } else {
+        if (quantity > maxStock) {
+          toast.error(
+            `Stok ${product?.name ?? "produk"} hanya tersisa ${maxStock} pcs.`,
+          );
+          next[productId] = maxStock;
+        } else {
+          next[productId] = quantity;
+        }
+      }
       return next;
     });
   }
 
   function addProduct(productId: string) {
-    setQuantity(productId, (cart[productId] ?? 0) + 1);
+    const product = products.find((p) => p.id === productId);
+    if (!product || product.stock <= 0) {
+      toast.error(`Stok ${product?.name ?? "produk"} sedang habis.`);
+      return;
+    }
+    const currentQty = cart[productId] ?? 0;
+    if (currentQty >= product.stock) {
+      toast.error(`Stok ${product.name} hanya tersisa ${product.stock} pcs.`);
+      return;
+    }
+    setQuantity(productId, currentQty + 1);
+  }
+
+  async function handleAdjustShelfStock(
+    event: React.MouseEvent,
+    product: ProductView,
+    delta: number,
+  ) {
+    event.stopPropagation();
+    if (adjustingStockId) return;
+
+    setAdjustingStockId(product.id);
+    const result = await adjustProductStockAction(product.id, delta);
+    setAdjustingStockId(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(
+      `Stok fisik ${product.name}: ${result.data.stock} pcs ${
+        result.data.stock <= 0 ? "(Stok habis)" : ""
+      }`,
+    );
+
+    // If stock is now less than current in cart, cap cart quantity
+    if ((cart[product.id] ?? 0) > result.data.stock) {
+      setQuantity(product.id, result.data.stock);
+    }
+
+    router.refresh();
   }
 
   function openConfirm() {
@@ -100,6 +163,17 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
       nameInputRef.current?.focus();
       return;
     }
+
+    // Double check stock sufficiency
+    for (const item of items) {
+      if (item.quantity > item.product.stock) {
+        toast.error(
+          `Stok ${item.product.name} tidak mencukupi (tersedia: ${item.product.stock}, di keranjang: ${item.quantity}). Sesuaikan keranjang terlebih dahulu.`,
+        );
+        return;
+      }
+    }
+
     setError(null);
     setPaidConfirmed(false);
     setConfirmOpen(true);
@@ -185,7 +259,7 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
               <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Kasir: {cashierName}
               </span>
-              <Badge tone="mint">{products.length} produk aktif</Badge>
+              <Badge tone="mint">{products.length} menu katalog</Badge>
             </div>
           </div>
 
@@ -198,54 +272,140 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
               {filteredProducts.map((product) => {
                 const quantity = cart[product.id] ?? 0;
+                const isOutOfStock = product.stock <= 0;
+                const isLowStock = product.stock > 0 && product.stock < 5;
+
                 return (
-                  <button
+                  <div
                     key={product.id}
-                    type="button"
-                    onClick={() => addProduct(product.id)}
                     className={cn(
-                      "press flex flex-col overflow-hidden border-[3px] border-ink text-left shadow-hard-sm",
-                      quantity > 0 ? "bg-butter-soft" : "bg-paper",
+                      "flex flex-col justify-between overflow-hidden border-[3px] border-ink text-left shadow-hard-sm transition",
+                      quantity > 0
+                        ? "bg-butter-soft"
+                        : isOutOfStock
+                          ? "bg-paper/70 opacity-80"
+                          : "bg-paper",
                     )}
                   >
-                    <div className="relative aspect-[4/3] w-full overflow-hidden border-b-[3px] border-ink bg-butter-soft">
-                      {product.imageUrl ? (
-                        <Image
-                          src={product.imageUrl}
-                          alt={product.name}
-                          fill
-                          sizes="(max-width: 640px) 50vw, 240px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="hatch flex h-full w-full items-center justify-center">
-                          <span className="font-display text-5xl uppercase text-ink/25">
-                            {product.name.slice(0, 1)}
-                          </span>
-                        </div>
+                    {/* Clickable Card Header & Image for Adding to Cart */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => addProduct(product.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          addProduct(product.id);
+                        }
+                      }}
+                      className={cn(
+                        "group cursor-pointer select-none",
+                        isOutOfStock && "cursor-not-allowed",
                       )}
+                      title={
+                        isOutOfStock
+                          ? "Stok habis"
+                          : `Klik untuk tambah ke keranjang (Sisa: ${product.stock})`
+                      }
+                    >
+                      <div className="relative aspect-[4/3] w-full overflow-hidden border-b-[3px] border-ink bg-butter-soft">
+                        {product.imageUrl ? (
+                          <Image
+                            src={product.imageUrl}
+                            alt={product.name}
+                            fill
+                            sizes="(max-width: 640px) 50vw, 240px"
+                            className="object-cover transition group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="hatch flex h-full w-full items-center justify-center">
+                            <span className="font-display text-5xl uppercase text-ink/25">
+                              {product.name.slice(0, 1)}
+                            </span>
+                          </div>
+                        )}
 
-                      {quantity > 0 ? (
-                        <span className="absolute right-2 top-2 flex size-8 items-center justify-center border-[3px] border-ink bg-ink font-mono text-sm font-bold text-cream shadow-hard-sm">
-                          {quantity}
-                        </span>
-                      ) : null}
-                    </div>
+                        {/* Cart Quantity Badge */}
+                        {quantity > 0 ? (
+                          <span className="absolute right-2 top-2 flex size-8 items-center justify-center border-[3px] border-ink bg-ink font-mono text-sm font-bold text-cream shadow-hard-sm">
+                            {quantity}
+                          </span>
+                        ) : null}
 
-                    <div className="flex flex-1 flex-col justify-between gap-2 p-2.5">
-                      <p className="line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
-                        {product.name}
-                      </p>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-mono text-[11px] font-bold">
-                          {formatIDR(product.price)}
-                        </span>
-                        <span className="flex size-6 items-center justify-center border-2 border-ink bg-butter">
-                          <Plus className="size-3" strokeWidth={3.5} />
-                        </span>
+                        {/* Out of stock watermark badge */}
+                        {isOutOfStock ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-paper/85">
+                            <span className="border-2 border-ink bg-danger px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-cream shadow-hard-sm">
+                              Stok Habis
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="p-2.5 pb-1.5">
+                        <p className="line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
+                          {product.name}
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-1">
+                          <span className="font-mono text-[11px] font-bold">
+                            {formatIDR(product.price)}
+                          </span>
+                          {!isOutOfStock ? (
+                            <span className="flex size-5 items-center justify-center border-2 border-ink bg-butter group-hover:bg-[#ffd35c]">
+                              <Plus className="size-3" strokeWidth={3.5} />
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </button>
+
+                    {/* Shelf Stock Indicator & Quick Adjustment Buttons */}
+                    <div className="mt-1 border-t-2 border-dashed border-ink/25 bg-cream/30 px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="min-w-0">
+                          <span className="block font-mono text-[7px] uppercase tracking-wider text-muted">
+                            Fisik Etalase
+                          </span>
+                          <span
+                            className={cn(
+                              "font-mono text-[10px] font-bold leading-none",
+                              isOutOfStock
+                                ? "text-danger"
+                                : isLowStock
+                                  ? "text-amber-700"
+                                  : "text-ink",
+                            )}
+                          >
+                            {isOutOfStock ? "Habis (0)" : `${product.stock} pcs`}
+                          </span>
+                        </div>
+
+                        {/* Quick Action +/- for shelf stock */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => handleAdjustShelfStock(e, product, -1)}
+                            disabled={adjustingStockId === product.id || product.stock <= 0}
+                            className="flex size-6 items-center justify-center border-2 border-ink bg-paper font-bold hover:bg-cream disabled:opacity-30"
+                            title="Kurangi stok etalase (-1)"
+                            aria-label={`Kurangi stok ${product.name}`}
+                          >
+                            <Minus className="size-2.5" strokeWidth={3.5} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleAdjustShelfStock(e, product, 1)}
+                            disabled={adjustingStockId === product.id}
+                            className="flex size-6 items-center justify-center border-2 border-ink bg-butter font-bold hover:bg-[#ffd35c] disabled:opacity-30"
+                            title="Tambah stok etalase (+1)"
+                            aria-label={`Tambah stok ${product.name}`}
+                          >
+                            <Plus className="size-2.5" strokeWidth={3.5} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -274,50 +434,75 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
                 </div>
               ) : (
                 <ul className="space-y-2">
-                  {items.map((item) => (
-                    <li
-                      key={item.product.id}
-                      className="border-2 border-ink bg-cream/40 p-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-bold leading-tight">{item.product.name}</p>
-                        <button
-                          type="button"
-                          onClick={() => setQuantity(item.product.id, 0)}
-                          className="text-muted transition hover:text-danger"
-                          aria-label={`Hapus ${item.product.name}`}
-                        >
-                          <Trash2 className="size-3.5" strokeWidth={3} />
-                        </button>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1">
+                  {items.map((item) => {
+                    const atStockLimit = item.quantity >= item.product.stock;
+                    return (
+                      <li
+                        key={item.product.id}
+                        className="border-2 border-ink bg-cream/40 p-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-bold leading-tight">
+                              {item.product.name}
+                            </p>
+                            <span className="font-mono text-[9px] text-muted">
+                              Stok: {item.product.stock} pcs
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setQuantity(item.product.id, item.quantity - 1)}
-                            className="flex size-6 items-center justify-center border-2 border-ink bg-paper hover:bg-cream"
-                            aria-label={`Kurangi ${item.product.name}`}
+                            onClick={() => setQuantity(item.product.id, 0)}
+                            className="text-muted transition hover:text-danger"
+                            aria-label={`Hapus ${item.product.name}`}
                           >
-                            <Minus className="size-3" strokeWidth={3.5} />
-                          </button>
-                          <span className="w-6 text-center font-mono text-xs font-bold">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setQuantity(item.product.id, item.quantity + 1)}
-                            className="flex size-6 items-center justify-center border-2 border-ink bg-butter hover:bg-[#ffd35c]"
-                            aria-label={`Tambah ${item.product.name}`}
-                          >
-                            <Plus className="size-3" strokeWidth={3.5} />
+                            <Trash2 className="size-3.5" strokeWidth={3} />
                           </button>
                         </div>
-                        <span className="font-mono text-[11px] font-bold">
-                          {formatIDR(item.product.price * item.quantity)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setQuantity(item.product.id, item.quantity - 1)
+                              }
+                              className="flex size-6 items-center justify-center border-2 border-ink bg-paper hover:bg-cream"
+                              aria-label={`Kurangi ${item.product.name}`}
+                            >
+                              <Minus className="size-3" strokeWidth={3.5} />
+                            </button>
+                            <span className="w-7 text-center font-mono text-xs font-bold">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setQuantity(item.product.id, item.quantity + 1)
+                              }
+                              disabled={atStockLimit}
+                              className={cn(
+                                "flex size-6 items-center justify-center border-2 border-ink",
+                                atStockLimit
+                                  ? "cursor-not-allowed bg-muted/20 opacity-40"
+                                  : "bg-butter hover:bg-[#ffd35c]",
+                              )}
+                              title={
+                                atStockLimit
+                                  ? "Maksimal stok tercapai"
+                                  : `Tambah ${item.product.name}`
+                              }
+                              aria-label={`Tambah ${item.product.name}`}
+                            >
+                              <Plus className="size-3" strokeWidth={3.5} />
+                            </button>
+                          </div>
+                          <span className="font-mono text-[11px] font-bold">
+                            {formatIDR(item.product.price * item.quantity)}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -352,7 +537,9 @@ export function PosTerminal({ products, qrisEnabled, timezone, cashierName }: Pr
                   aria-pressed={method === "cash"}
                   className={cn(
                     "flex items-center justify-center gap-1.5 border-[3px] border-ink py-2 font-mono text-[10px] font-bold uppercase tracking-[0.08em] transition",
-                    method === "cash" ? "bg-butter shadow-hard-sm" : "bg-paper hover:bg-cream",
+                    method === "cash"
+                      ? "bg-butter shadow-hard-sm"
+                      : "bg-paper hover:bg-cream",
                   )}
                 >
                   <Banknote className="size-3.5" strokeWidth={3} />

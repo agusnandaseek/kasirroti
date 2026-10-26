@@ -33,6 +33,7 @@ export default async function PreorderPage() {
           <div className="mb-6 flex flex-col gap-5 border-b-[3px] border-ink pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="terracotta">Jadwal Mulai Besok (H+1)</Badge>
                 <Badge tone="butter">Tanpa akun</Badge>
                 <Badge tone="outline">Bayar di toko</Badge>
                 <Badge tone="mint">Konfirmasi manual</Badge>
