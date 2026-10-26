@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_SETTINGS, type BusinessHours, type StoreSettingsView } from "@/lib/types";
 
@@ -11,7 +12,7 @@ type SettingsRow = {
   manual_qris_enabled: boolean;
 };
 
-export async function getSettings(): Promise<StoreSettingsView> {
+export const getSettings = cache(async (): Promise<StoreSettingsView> => {
   const { data, error } = await getAdminClient()
     .from("store_settings")
     .select(
@@ -31,4 +32,5 @@ export async function getSettings(): Promise<StoreSettingsView> {
     minPreorderMinutes: Number(data.min_preorder_minutes),
     manualQrisEnabled: Boolean(data.manual_qris_enabled),
   };
-}
+});
+

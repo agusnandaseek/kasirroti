@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { getAdminClient } from "@/lib/supabase/admin";
 import type { ProductView } from "@/lib/types";
 
@@ -24,7 +25,7 @@ function mapProduct(row: ProductRow): ProductView {
   };
 }
 
-export async function listProducts(options: { availableOnly?: boolean } = {}) {
+export const listProducts = cache(async (options: { availableOnly?: boolean } = {}) => {
   let query = getAdminClient()
     .from("products")
     .select("id, name, description, price, cost_price, image_url, is_available")
@@ -38,9 +39,9 @@ export async function listProducts(options: { availableOnly?: boolean } = {}) {
   if (error) throw new Error(`Gagal memuat produk: ${error.message}`);
 
   return ((data ?? []) as ProductRow[]).map(mapProduct);
-}
+});
 
-export async function getProduct(id: string) {
+export const getProduct = cache(async (id: string) => {
   const { data, error } = await getAdminClient()
     .from("products")
     .select("id, name, description, price, cost_price, image_url, is_available")
@@ -49,4 +50,5 @@ export async function getProduct(id: string) {
 
   if (error) throw new Error(`Gagal memuat produk: ${error.message}`);
   return data ? mapProduct(data) : null;
-}
+});
+
