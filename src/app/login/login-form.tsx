@@ -12,7 +12,6 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [hasTurnstileToken, setHasTurnstileToken] = useState(false);
 
   return (
     <div className="mt-7">
@@ -61,12 +60,7 @@ export function LoginForm() {
 
         {/* Cloudflare Turnstile Verification */}
         <div className="pt-1">
-          <TurnstileWidget
-            action="login"
-            onSuccess={() => setHasTurnstileToken(true)}
-            onExpire={() => setHasTurnstileToken(false)}
-            onError={() => setHasTurnstileToken(false)}
-          />
+          <TurnstileWidget action="login" />
         </div>
 
         {state && !state.ok ? (

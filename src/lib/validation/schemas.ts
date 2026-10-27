@@ -71,6 +71,30 @@ export const rejectPreorderSchema = z.object({
 
 export const cancelOrderSchema = rejectPreorderSchema;
 
+export const deleteOrderSchema = z
+  .object({
+    orderId: uuid,
+    reasonCode: z.enum(
+      ["wrong_input", "duplicate", "customer_cancelled", "stock_mismatch", "other"],
+      { message: "Alasan hapus tidak valid." },
+    ),
+    reasonNote: z
+      .string()
+      .trim()
+      .max(500, "Catatan maksimal 500 karakter.")
+      .optional()
+      .default(""),
+  })
+  .superRefine((value, ctx) => {
+    if (value.reasonCode === "other" && value.reasonNote.length < 5) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reasonNote"],
+        message: "Catatan alasan minimal 5 karakter.",
+      });
+    }
+  });
+
 export const paymentSchema = z.object({
   orderId: uuid,
   method: z.enum(["cash", "manual_qris"], {

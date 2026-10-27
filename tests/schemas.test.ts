@@ -3,6 +3,7 @@ import {
   businessHoursSchema,
   cancelOrderSchema,
   dayHoursSchema,
+  deleteOrderSchema,
   employeeCreateSchema,
   loginSchema,
   paymentSchema,
@@ -295,5 +296,56 @@ describe("order action schemas", () => {
       paymentSchema.safeParse({ orderId: PRODUCT_ID, method: "manual_qris" }).success,
     ).toBe(true);
     expect(paymentSchema.safeParse({ orderId: PRODUCT_ID, method: "card" }).success).toBe(false);
+  });
+
+  it("requires a valid deletion reason", () => {
+    expect(
+      deleteOrderSchema.safeParse({
+        orderId: PRODUCT_ID,
+        reasonCode: "wrong_input",
+      }).success,
+    ).toBe(true);
+    expect(
+      deleteOrderSchema.safeParse({
+        orderId: PRODUCT_ID,
+        reasonCode: "not_a_reason",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a note of at least 5 characters for the other reason", () => {
+    expect(
+      deleteOrderSchema.safeParse({
+        orderId: PRODUCT_ID,
+        reasonCode: "other",
+        reasonNote: "    ",
+      }).success,
+    ).toBe(false);
+    expect(
+      deleteOrderSchema.safeParse({
+        orderId: PRODUCT_ID,
+        reasonCode: "other",
+        reasonNote: "  Salah pilih produk  ",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("trims the deletion note and rejects notes over 500 characters", () => {
+    const parsed = deleteOrderSchema.safeParse({
+      orderId: PRODUCT_ID,
+      reasonCode: "duplicate",
+      reasonNote: "  Transaksi dobel  ",
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.reasonNote).toBe("Transaksi dobel");
+
+    expect(
+      deleteOrderSchema.safeParse({
+        orderId: PRODUCT_ID,
+        reasonCode: "duplicate",
+        reasonNote: "x".repeat(501),
+      }).success,
+    ).toBe(false);
   });
 });

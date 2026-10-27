@@ -57,7 +57,7 @@ export type TransactionLogResult = {
   limit: number;
 };
 
-function formatActionTitle(toStatus: string, fromStatus: string | null, actorType: string): string {
+function formatActionTitle(toStatus: string, fromStatus: string | null): string {
   if (!fromStatus && toStatus === "pending_confirmation") return "Pre-order Dibuat oleh Pelanggan";
   if (!fromStatus && toStatus === "queued") return "Pesanan Walk-in Dibuat di Kasir";
   if (toStatus === "confirmed") return "Pre-order Dikonfirmasi Kasir";
@@ -228,7 +228,7 @@ export async function listTransactionLogs(
         id: h.id,
         fromStatus: h.from_status,
         toStatus: h.to_status,
-        actionTitle: formatActionTitle(h.to_status, h.from_status, h.actor_type),
+        actionTitle: formatActionTitle(h.to_status, h.from_status),
         actorType: h.actor_type,
         actorName,
         actorRole,

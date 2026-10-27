@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
+import { LogViewTabs } from "@/components/admin/logs/log-view-tabs";
 import { TransactionLogCard } from "@/components/admin/logs/transaction-log-card";
 import { requireRole } from "@/lib/auth";
 import { listTransactionLogs, type TimeRangeFilter } from "@/lib/data/logs";
@@ -83,6 +84,8 @@ export default async function AdminLogsPage({
         title="Log Aktivitas Transaksi"
         actions={<AutoRefresh label="Auto-refresh" intervalMs={20000} />}
       />
+
+      <LogViewTabs active="transactions" />
 
       {/* Filter Bar */}
       <Card className="space-y-4 p-4 sm:p-5">

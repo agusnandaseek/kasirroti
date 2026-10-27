@@ -5,6 +5,7 @@ import { getActionProfile } from "@/lib/auth";
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
   cancelOrderSchema,
+  deleteOrderSchema,
   orderIdSchema,
   paymentSchema,
 } from "@/lib/validation/schemas";
@@ -16,6 +17,10 @@ function refreshOrderViews() {
   revalidatePath("/admin");
   revalidatePath("/admin/sales");
   revalidatePath("/admin/preorders");
+  revalidatePath("/admin/reports");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/logs");
+  revalidatePath("/admin/logs/deletions");
 }
 
 export type OrderRpcResult = {
@@ -170,6 +175,50 @@ export async function cancelOrderAction(
     refreshOrderViews();
 
     return actionOk({ status: (data as { order_status: string }).order_status });
+  } catch (error) {
+    return actionFail(toActionError(error));
+  }
+}
+
+export type DeletedOrderResult = {
+  orderCode: string;
+  stockRestored: boolean;
+  unitsRestored: number;
+};
+
+export async function deleteOrderAction(
+  orderId: string,
+  reasonCode: string,
+  reasonNote: string,
+): Promise<ActionResult<DeletedOrderResult>> {
+  try {
+    const profile = await getActionProfile(["cashier", "admin"]);
+    const parsed = deleteOrderSchema.safeParse({ orderId, reasonCode, reasonNote });
+    if (!parsed.success) {
+      return actionFail(parsed.error.issues[0]?.message ?? "Data penghapusan tidak valid.");
+    }
+
+    const { data, error } = await getAdminClient().rpc("delete_order_with_audit", {
+      p_order_id: parsed.data.orderId,
+      p_actor: profile.id,
+      p_reason_code: parsed.data.reasonCode,
+      p_reason_note: parsed.data.reasonNote || undefined,
+    });
+
+    if (error) throw error;
+    refreshOrderViews();
+
+    const result = data as {
+      order_code: string;
+      stock_restored: boolean;
+      units_restored: number;
+    };
+
+    return actionOk({
+      orderCode: result.order_code,
+      stockRestored: Boolean(result.stock_restored),
+      unitsRestored: Number(result.units_restored ?? 0),
+    });
   } catch (error) {
     return actionFail(toActionError(error));
   }

@@ -6,7 +6,6 @@ import {
   CircleAlert,
   Clock3,
   MapPin,
-  ReceiptText,
   ShieldCheck,
   Wallet,
 } from "lucide-react";

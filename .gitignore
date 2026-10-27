@@ -56,6 +56,6 @@ next-env.d.ts
 # codegraph
 .codegraph/
 
-
-.vercel
-.env*
+# Remotion video project (not part of the POS app)
+/video/
+/VO VIDEO/

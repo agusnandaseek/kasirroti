@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -64,7 +65,7 @@ export function PreorderAlertProvider({
   const lastNotifiedIds = useRef<Set<string>>(new Set());
   const initialFetchDone = useRef(false);
 
-  const fetchAlerts = async () => {
+  const fetchAlerts = useCallback(async () => {
     try {
       const res = await fetch("/api/alerts/preorders", { cache: "no-store" });
       if (!res.ok) return;
@@ -168,24 +169,26 @@ export function PreorderAlertProvider({
           );
         }
       }
-    } catch (e) {
+    } catch {
       // Silently catch network failures during polling
     }
-  };
+  }, [role]);
 
   useEffect(() => {
-    fetchAlerts();
-    const interval = setInterval(fetchAlerts, 15000);
+    // Defer the initial poll so the effect does not set state synchronously.
+    const initialFetch = window.setTimeout(fetchAlerts, 0);
+    const interval = window.setInterval(fetchAlerts, 15000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") fetchAlerts();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
+      window.clearTimeout(initialFetch);
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [role]);
+  }, [fetchAlerts]);
 
   return (
     <PreorderAlertContext.Provider

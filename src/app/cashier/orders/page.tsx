@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { OrderActions } from "@/components/cashier/order-actions";
+import { DeleteOrderButton } from "@/components/orders/delete-order-button";
 import { listActiveQueue, listCompletedToday } from "@/lib/data/orders";
 import { getSettings } from "@/lib/data/settings";
 import { requireProfile } from "@/lib/auth";
@@ -239,8 +240,31 @@ function OrderCard({
             queueIndex={queueIndex}
             activeCode={activeCode}
           />
+          <div className="mt-2 flex justify-end border-t-2 border-dotted border-ink/25 pt-2">
+            <DeleteOrderButton
+              orderId={order.id}
+              code={order.code}
+              orderType={order.type}
+              totalAmount={order.totalAmount}
+              variant="ghost"
+              label="Hapus"
+              className="text-danger hover:bg-[#fdeae6]"
+            />
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex justify-end border-t-2 border-dotted border-ink/25 px-2 py-1.5">
+          <DeleteOrderButton
+            orderId={order.id}
+            code={order.code}
+            orderType={order.type}
+            totalAmount={order.totalAmount}
+            variant="ghost"
+            label="Hapus"
+            className="text-danger hover:bg-[#fdeae6]"
+          />
+        </div>
+      )}
     </article>
   );
 }

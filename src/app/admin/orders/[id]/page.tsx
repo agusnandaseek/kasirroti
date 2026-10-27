@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { OrderActions } from "@/components/cashier/order-actions";
 import { PreorderActions } from "@/components/cashier/preorder-actions";
+import { DeleteOrderButton } from "@/components/orders/delete-order-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, PanelLabel } from "@/components/ui/card";
@@ -419,6 +420,21 @@ export default async function AdminOrderDetailPage({
                   Buka antrean
                 </Link>
                 <CopyButton value={order.id} label="Salin ID" variant="ghost" size="sm" />
+              </div>
+
+              <div className="space-y-2 border-t-2 border-dotted border-ink/25 pt-3">
+                <p className="text-[10px] leading-relaxed text-muted">
+                  Menghapus transaksi akan mengembalikan stok walk-in dan menyimpan jejak audit
+                  berisi akun penghapus, waktu, alasan, dan rincian item.
+                </p>
+                <DeleteOrderButton
+                  orderId={order.id}
+                  code={order.code}
+                  orderType={order.type}
+                  totalAmount={order.totalAmount}
+                  redirectTo={isPreorder ? "/admin/preorders" : "/admin/sales"}
+                  fullWidth
+                />
               </div>
             </CardContent>
           </Card>

@@ -147,7 +147,7 @@ Buka `http://localhost:3000`.
 | Route | Fungsi |
 | --- | --- |
 | `/cashier/pos` | Terminal walk-in: pilih produk, isi nama pemesan, bayar, masuk antrean |
-| `/cashier/orders` | Kartu antrean ringkas (mobile-first), prioritas Proses/Batalkan, aksi status/pembayaran |
+| `/cashier/orders` | Kartu antrean ringkas (mobile-first), prioritas Proses/Batalkan, aksi status/pembayaran, dan hapus transaksi |
 | `/cashier/preorders` | Konfirmasi/tolak pre-order, lihat kode lacak, kirim WhatsApp, dan masukkan ke antrean |
 
 Navigasi kasir hanya berisi tiga menu tersebut.
@@ -163,7 +163,9 @@ Navigasi kasir hanya berisi tiga menu tersebut.
 | `/admin/employees` | Buat akun, ubah peran/status, proteksi admin terakhir |
 | `/admin/reports` | Grafik omzet & keuntungan, transaksi per kasir yang dapat diklik, penanda kasir berkeuntungan tertinggi, produk terlaris, ekspor Excel/PDF |
 | `/admin/settings` | Nama toko, zona waktu, jam buka, slot, lead time, QRIS manual |
-| `/admin/orders/[id]` | Detail pesanan, riwayat status, pembayaran, pembatalan |
+| `/admin/logs` | Log aktivitas transaksi (status, pembayaran, pelaku) |
+| `/admin/logs/deletions` | Log penghapusan transaksi: akun penghapus, waktu, alasan, item, dan stok yang dikembalikan |
+| `/admin/orders/[id]` | Detail pesanan, riwayat status, pembayaran, pembatalan, dan hapus transaksi permanen |
 
 Admin dapat membuka area kasir. Kasir tidak dapat membuka area admin.
 
@@ -223,6 +225,29 @@ Keduanya hanya menghitung pembayaran yang tercatat (`payments.paid_at`); pre-ord
 ### Pembatalan
 
 Admin dapat membatalkan pesanan pada status `pending_confirmation`, `confirmed`, `queued`, `preparing`, atau `ready`. Pembatalan wajib menyertakan alasan. Jika pesanan yang dibatalkan sedang aktif, pesanan berprioritas (atau antrean terdepan bila tidak ada prioritas) otomatis dipromosikan. Jika pesanan sudah dibayar, sistem menampilkan peringatan bahwa refund dilakukan manual di luar aplikasi.
+
+### Penghapusan transaksi permanen
+
+Kasir dan admin dapat menghapus transaksi dari kartu pesanan kasir atau dari kartu **Tindakan** pada detail pesanan admin. Penghapusan wajib memilih alasan:
+
+| Kode | Alasan |
+| --- | --- |
+| `wrong_input` | Salah input transaksi |
+| `duplicate` | Transaksi duplikat |
+| `customer_cancelled` | Pelanggan membatalkan |
+| `stock_mismatch` | Stok tidak sesuai |
+| `other` | Lainnya, wajib menulis catatan minimal 5 karakter |
+
+Saat transaksi dihapus:
+
+- Order dan pembayarannya dihapus permanen sehingga tidak lagi muncul di penjualan, laporan, dashboard, atau antrean kasir.
+- Untuk **walk-in**, stok setiap produk ditambahkan kembali sesuai jumlah yang terjual dan produk ditandai tersedia kembali.
+- Untuk **pre-order**, stok tidak dikembalikan karena pembuatan pre-order tidak pernah mengurangi stok.
+- Jika order yang dihapus sedang aktif (`queued`, `preparing`, `ready`), pesanan berikutnya otomatis dipromosikan.
+- Snapshot audit tetap disimpan di `order_deletions`: kode order, pelanggan, item dan harga saat itu, pembayaran, akun penghapus beserta perannya, waktu, alasan, catatan, serta jumlah stok yang dikembalikan.
+- Audit dapat dibuka di `/admin/logs/deletions` (tab **Penghapusan** pada halaman log).
+
+RPC `delete_order_with_audit` berjalan atomik: validasi alasan, snapshot audit, pengembalian stok, penghapusan pembayaran/order, dan promosi antrean berada dalam satu transaksi. Tabel `order_deletions` memakai RLS default-deny dan hanya dapat diakses service role.
 
 ---
 
@@ -326,6 +351,8 @@ Pada PowerShell, set `$env:ADMIN_EMAIL`, `$env:ADMIN_PASSWORD`, dan `$env:ADMIN_
 - Start command: `npm run start`
 - Set environment variables yang sama seperti `.env.local`, dengan `NEXT_PUBLIC_APP_URL` berisi URL produksi.
 - `SUPABASE_SERVICE_ROLE_KEY` dan `TRACKING_TOKEN_PEPPER` hanya boleh tersedia sebagai environment server.
+- Isi `NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY` dan `CLOUDFLARE_TURNSTILE_SECRET_KEY`. Tanpa keduanya, login staf dan form pre-order akan ditolak. Daftarkan domain produksi pada widget Turnstile di dashboard Cloudflare.
+- Pastikan domain produksi juga terdaftar di **Authentication → URL Configuration** Supabase (Site URL dan Redirect URLs).
 
 ---
 
